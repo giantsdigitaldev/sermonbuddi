@@ -270,7 +270,7 @@ Let's start by telling me about your project idea. What would you like to work o
         <View style={[
           styles.chatContainer,
           {
-            marginBottom: Platform.OS === 'android' && isKeyboardVisible ? keyboardHeight : tabBarHeight,
+            marginBottom: isKeyboardVisible ? 0 : (Platform.OS === 'ios' ? 90 : 60), // Tab bar height when keyboard is hidden
           }
         ]}>
           {/* Chat Messages */}
@@ -305,7 +305,7 @@ Let's start by telling me about your project idea. What would you like to work o
             <View style={[
               styles.loadingContainer,
               { 
-                bottom: isKeyboardVisible ? 80 : tabBarHeight + 80 // Position above input
+                bottom: isKeyboardVisible ? 80 : (Platform.OS === 'ios' ? 90 : 60) + 80 // Position above input
               }
             ]}>
               <ActivityIndicator size="small" color={COLORS.primary} />
@@ -325,55 +325,62 @@ Let's start by telling me about your project idea. What would you like to work o
           { 
             backgroundColor: dark ? COLORS.dark2 : COLORS.white,
             paddingBottom: Platform.OS === 'ios' ? insets.bottom : 16,
-            bottom: isKeyboardVisible ? 0 : tabBarHeight, // Position above tab bar when keyboard is hidden
+            // Apply tab bar animation only when keyboard is NOT visible
             transform: isKeyboardVisible ? [] : [{ 
-              translateY: Animated.multiply(tabBarTranslateY, 0.3) // Animation only when keyboard is hidden
+              translateY: Animated.multiply(tabBarTranslateY, 0.3)
             }],
+            // Position above tab bar when keyboard is hidden, at bottom when visible
+            bottom: isKeyboardVisible ? 0 : (Platform.OS === 'ios' ? 90 : 60),
+            position: 'absolute',
+            left: 0,
+            right: 0,
           }
         ]}>
-          <TextInput
-            ref={textInputRef}
-            style={[
-              styles.textInput,
-              {
-                backgroundColor: dark ? COLORS.dark3 : COLORS.grayscale100,
-                color: dark ? COLORS.white : COLORS.greyscale900,
-              }
-            ]}
-            placeholder="Type your message..."
-            placeholderTextColor={dark ? COLORS.grayscale400 : COLORS.greyscale600}
-            value={inputText}
-            onChangeText={setInputText}
-            onKeyPress={handleKeyPress}
-            multiline
-            maxLength={1000}
-            editable={!isLoading}
-            returnKeyType="send"
-            onSubmitEditing={sendMessage}
-            blurOnSubmit={false}
-            onFocus={() => {
-              // Scroll to bottom when input is focused
-              setTimeout(() => {
-                flatListRef.current?.scrollToEnd({ animated: true });
-              }, Platform.OS === 'ios' ? 300 : 500);
-            }}
-          />
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              {
-                backgroundColor: inputText.trim() && !isLoading ? COLORS.primary : COLORS.greyscale300,
-              }
-            ]}
-            onPress={sendMessage}
-            disabled={!inputText.trim() || isLoading}
-          >
-            <Ionicons 
-              name="send" 
-              size={20} 
-              color={COLORS.white} 
+          <View style={styles.inputWrapper}>
+            <TextInput
+              ref={textInputRef}
+              style={[
+                styles.textInput,
+                {
+                  backgroundColor: dark ? COLORS.dark3 : COLORS.grayscale100,
+                  color: dark ? COLORS.white : COLORS.greyscale900,
+                }
+              ]}
+              placeholder="Type your message..."
+              placeholderTextColor={dark ? COLORS.grayscale400 : COLORS.greyscale600}
+              value={inputText}
+              onChangeText={setInputText}
+              onKeyPress={handleKeyPress}
+              multiline
+              maxLength={1000}
+              editable={!isLoading}
+              returnKeyType="send"
+              onSubmitEditing={sendMessage}
+              blurOnSubmit={false}
+              onFocus={() => {
+                // Scroll to bottom when input is focused
+                setTimeout(() => {
+                  flatListRef.current?.scrollToEnd({ animated: true });
+                }, Platform.OS === 'ios' ? 300 : 500);
+              }}
             />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                {
+                  backgroundColor: inputText.trim() && !isLoading ? COLORS.primary : COLORS.greyscale300,
+                }
+              ]}
+              onPress={sendMessage}
+              disabled={!inputText.trim() || isLoading}
+            >
+              <Ionicons 
+                name="send" 
+                size={20} 
+                color={COLORS.white} 
+              />
+            </TouchableOpacity>
+          </View>
         </Animated.View>
       </KeyboardAvoidingView>
     </View>
@@ -467,15 +474,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
     paddingHorizontal: 16,
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: COLORS.grayscale200,
-    position: 'absolute',
-    left: 0,
-    right: 0,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    width: '100%',
   },
   textInput: {
     flex: 1,
