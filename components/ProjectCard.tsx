@@ -1,8 +1,8 @@
-import { View, Text, StyleSheet, Image, ImageSourcePropType, TouchableOpacity, ViewStyle } from 'react-native';
-import React from 'react';
 import { COLORS, icons, SIZES } from '@/constants';
-import * as Progress from 'react-native-progress';
 import { useTheme } from '@/theme/ThemeProvider';
+import React from 'react';
+import { Alert, Image, ImageSourcePropType, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
+import * as Progress from 'react-native-progress';
 
 type CustomStyles = {
     card?: ViewStyle;
@@ -22,6 +22,8 @@ type ProjectCardProps = {
     endDate: string;
     customStyles?: CustomStyles;
     onPress?: () => void;
+    onEdit?: (field: string, value: any) => void;
+    onDelete?: () => void;
 };
 
 const colors = {
@@ -33,9 +35,11 @@ const colors = {
 }
 
 const ProjectCard: React.FC<ProjectCardProps> = ({
+    id,
     name,
     description,
     image,
+    status,
     numberOfTask,
     numberOfTaskCompleted,
     numberOfDaysLeft,
@@ -43,10 +47,95 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
     members,
     endDate,
     customStyles = {},
-    onPress
+    onPress,
+    onEdit,
+    onDelete
 }) => {
     const { dark } = useTheme();
     const progress = numberOfTaskCompleted / numberOfTask;
+
+    const handleMorePress = () => {
+        Alert.alert(
+            'Project Options',
+            'What would you like to do?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                { 
+                    text: 'Edit Name', 
+                    onPress: () => {
+                        Alert.prompt(
+                            'Edit Project Name',
+                            'Enter new project name:',
+                            [
+                                { text: 'Cancel', style: 'cancel' },
+                                { 
+                                    text: 'Save', 
+                                    onPress: (text) => {
+                                        if (text && text.trim() && onEdit) {
+                                            onEdit('name', text.trim());
+                                        }
+                                    }
+                                }
+                            ],
+                            'plain-text',
+                            name
+                        );
+                    }
+                },
+                { 
+                    text: 'Edit Description', 
+                    onPress: () => {
+                        Alert.prompt(
+                            'Edit Project Description',
+                            'Enter new description:',
+                            [
+                                { text: 'Cancel', style: 'cancel' },
+                                { 
+                                    text: 'Save', 
+                                    onPress: (text) => {
+                                        if (text && onEdit) {
+                                            onEdit('description', text);
+                                        }
+                                    }
+                                }
+                            ],
+                            'plain-text',
+                            description
+                        );
+                    }
+                },
+                { 
+                    text: 'Change Status', 
+                    onPress: () => {
+                        Alert.alert(
+                            'Change Status',
+                            'Select new status:',
+                            [
+                                { text: 'Cancel', style: 'cancel' },
+                                { 
+                                    text: 'Active', 
+                                    onPress: () => onEdit && onEdit('status', 'active')
+                                },
+                                { 
+                                    text: 'Completed', 
+                                    onPress: () => onEdit && onEdit('status', 'completed')
+                                },
+                                { 
+                                    text: 'Archived', 
+                                    onPress: () => onEdit && onEdit('status', 'archived')
+                                }
+                            ]
+                        );
+                    }
+                },
+                { 
+                    text: 'Delete', 
+                    style: 'destructive',
+                    onPress: onDelete
+                }
+            ]
+        );
+    };
     
     return (
         <TouchableOpacity onPress={onPress} style={[styles.card, customStyles.card, { 
@@ -77,7 +166,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
                     <Text style={[styles.projectName, { 
                         color: dark? COLORS.white : COLORS.greyscale900
                     }]}>{name}</Text>
-                    <TouchableOpacity>
+                    <TouchableOpacity onPress={handleMorePress}>
                         <Image
                             source={icons.moreCircle}
                             resizeMode='contain'

@@ -42,6 +42,19 @@ interface ClaudeDirectResponse {
   usage?: any;
 }
 
+interface ClaudeMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
+
+interface MessageImportance {
+  score: number;
+  keywords: string[];
+  isKeyDecision: boolean;
+  isRequirement: boolean;
+  isActionItem: boolean;
+}
+
 export class ChatService {
   
   /**
@@ -55,7 +68,7 @@ export class ChatService {
    * Call Claude API directly - for mobile platforms
    */
   private static async callClaudeAPIDirect(
-    messages: Array<{role: 'user' | 'assistant', content: string}>
+    messages: ClaudeMessage[]
   ): Promise<string> {
     try {
       const claudeApiKey = process.env.EXPO_PUBLIC_CLAUDE_API_KEY;
@@ -116,7 +129,7 @@ export class ChatService {
    * Call Claude API for web platforms - optimized for speed
    */
   private static async callClaudeAPIForWeb(
-    messages: Array<{role: 'user' | 'assistant', content: string}>
+    messages: ClaudeMessage[]
   ): Promise<string> {
     console.log('🌐 Attempting Claude API call for web...');
 
@@ -206,7 +219,7 @@ Once the proxy server is running, refresh this page and try again!`;
    * Smart API call that chooses the right method based on platform
    */
   private static async callClaudeAPI(
-    messages: Array<{role: 'user' | 'assistant', content: string}>,
+    messages: ClaudeMessage[],
     conversationId?: string
   ): Promise<string> {
     if (this.isWeb()) {
@@ -253,6 +266,234 @@ Once the proxy server is running, refresh this page and try again!`;
   }
 
   /**
+   * Estimate token count for a message
+   * Rough estimation: 1 token ≈ 4 characters for English text
+   */
+  private static estimateTokenCount(text: string): number {
+    return Math.ceil(text.length / 4);
+  }
+
+  /**
+   * Calculate message importance score
+   */
+  private static calculateMessageImportance(message: { content: string }): MessageImportance {
+    const content = message.content.toLowerCase();
+    const keywords = [
+      // Decision-related keywords
+      'decision', 'decide', 'choose', 'select', 'option', 'alternative',
+      // Requirement-related keywords
+      'require', 'must', 'should', 'need', 'necessary', 'essential',
+      // Action-related keywords
+      'task', 'todo', 'action', 'next step', 'deadline', 'due date',
+      // Priority-related keywords
+      'important', 'critical', 'urgent', 'priority', 'high priority',
+      // Implementation-related keywords
+      'implement', 'develop', 'build', 'create', 'design', 'architecture',
+      // Problem-related keywords
+      'issue', 'problem', 'bug', 'error', 'fix', 'solution',
+      // Feature-related keywords
+      'feature', 'functionality', 'capability', 'component', 'module',
+      // Technical keywords
+      'api', 'database', 'server', 'client', 'frontend', 'backend',
+      // Business keywords
+      'business', 'requirement', 'stakeholder', 'user', 'customer',
+      // Project management keywords
+      'milestone', 'sprint', 'iteration', 'phase', 'stage', 'timeline'
+    ];
+
+    let score = 0;
+    const foundKeywords: string[] = [];
+    
+    // Check for key decision indicators
+    const isKeyDecision = content.includes('decision') || 
+                         content.includes('decide') || 
+                         content.includes('choose') ||
+                         content.includes('select') ||
+                         content.includes('option');
+
+    // Check for requirement indicators
+    const isRequirement = content.includes('require') || 
+                         content.includes('must') || 
+                         content.includes('should') ||
+                         content.includes('need') ||
+                         content.includes('necessary');
+
+    // Check for action item indicators
+    const isActionItem = content.includes('task') || 
+                        content.includes('todo') || 
+                        content.includes('action') ||
+                        content.includes('next step') ||
+                        content.includes('deadline');
+
+    // Check for priority indicators
+    const isHighPriority = content.includes('important') || 
+                          content.includes('critical') || 
+                          content.includes('urgent') ||
+                          content.includes('priority');
+
+    // Check for technical decision indicators
+    const isTechnicalDecision = content.includes('implement') || 
+                               content.includes('architecture') || 
+                               content.includes('design') ||
+                               content.includes('api') ||
+                               content.includes('database');
+
+    // Score based on keywords
+    keywords.forEach(keyword => {
+      if (content.includes(keyword)) {
+        score += 2;
+        foundKeywords.push(keyword);
+      }
+    });
+
+    // Boost scores for important message types
+    if (isKeyDecision) score += 5;
+    if (isRequirement) score += 4;
+    if (isActionItem) score += 3;
+    if (isHighPriority) score += 4;
+    if (isTechnicalDecision) score += 3;
+
+    // Additional scoring based on message length (longer messages might contain more context)
+    const messageLength = content.length;
+    if (messageLength > 500) score += 2;
+    if (messageLength > 1000) score += 3;
+
+    // Boost score for messages with multiple important indicators
+    const importantIndicators = [isKeyDecision, isRequirement, isActionItem, isHighPriority, isTechnicalDecision]
+      .filter(Boolean).length;
+    if (importantIndicators >= 2) score += importantIndicators;
+
+    return {
+      score,
+      keywords: foundKeywords,
+      isKeyDecision,
+      isRequirement,
+      isActionItem
+    };
+  }
+
+  /**
+   * Get smart context for conversation
+   */
+  private static async getSmartContext(
+    conversationId: string,
+    currentMessage: string,
+    maxTokens: number = 150000
+  ): Promise<ClaudeMessage[]> {
+    try {
+      // Get all messages
+      const { data: messages } = await supabase
+        .from('chat_messages')
+        .select('role, content, created_at')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true });
+
+      if (!messages) return [];
+
+      // Get conversation summary
+      const { data: conversation } = await supabase
+        .from('chat_conversations')
+        .select('metadata')
+        .eq('id', conversationId)
+        .single();
+
+      const summary = conversation?.metadata?.summary;
+      let totalTokens = summary ? this.estimateTokenCount(summary) : 0;
+      const relevantMessages: ClaudeMessage[] = [];
+
+      // Calculate importance scores for all messages
+      const messagesWithScores = messages.map(msg => ({
+        ...msg,
+        importance: this.calculateMessageImportance(msg)
+      }));
+
+      // Always include the most recent messages (last 100)
+      const recentMessages = messagesWithScores.slice(-100);
+      for (const msg of recentMessages) {
+        const messageTokens = this.estimateTokenCount(msg.content);
+        if (totalTokens + messageTokens <= maxTokens) {
+          relevantMessages.push({ role: msg.role, content: msg.content });
+          totalTokens += messageTokens;
+        } else {
+          // If we can't fit all 100 messages, break and use scoring for remaining space
+          break;
+        }
+      }
+
+      // If we have space left, add important messages from the rest of the conversation
+      if (totalTokens < maxTokens) {
+        const remainingMessages = messagesWithScores
+          .slice(0, -100)
+          .sort((a, b) => b.importance.score - a.importance.score);
+
+        for (const msg of remainingMessages) {
+          const messageTokens = this.estimateTokenCount(msg.content);
+          if (totalTokens + messageTokens <= maxTokens) {
+            relevantMessages.push({ role: msg.role, content: msg.content });
+            totalTokens += messageTokens;
+          } else {
+            break;
+          }
+        }
+      }
+
+      // Add summary as system message if available
+      if (summary) {
+        relevantMessages.unshift({
+          role: 'system',
+          content: `Previous conversation summary: ${summary}`
+        });
+      }
+
+      return relevantMessages;
+    } catch (error) {
+      console.error('Error getting smart context:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Generate and store conversation summary
+   */
+  private static async summarizeConversation(conversationId: string): Promise<void> {
+    try {
+      const { data: messages } = await supabase
+        .from('chat_messages')
+        .select('role, content')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true });
+
+      if (!messages || messages.length === 0) return;
+
+      // Create summary prompt
+      const summaryPrompt = `Please provide a concise summary (3-4 sentences) of this conversation, focusing on key decisions, requirements, and action items:
+
+${messages.map(m => `${m.role}: ${m.content}`).join('\n\n')}
+
+Summary:`;
+
+      // Get summary from Claude
+      const summary = await this.callClaudeAPI([
+        { role: 'user', content: summaryPrompt }
+      ]);
+
+      // Store summary in conversation metadata
+      await supabase
+        .from('chat_conversations')
+        .update({ 
+          metadata: { 
+            summary,
+            last_summarized_at: new Date().toISOString()
+          }
+        })
+        .eq('id', conversationId);
+
+    } catch (error) {
+      console.error('Error summarizing conversation:', error);
+    }
+  }
+
+  /**
    * Send a message and get AI response
    */
   static async sendMessage(
@@ -269,17 +510,8 @@ Once the proxy server is running, refresh this page and try again!`;
         throw new Error('User not authenticated');
       }
 
-      // Get conversation history for context
-      const { data: messages } = await supabase
-        .from('chat_messages')
-        .select('role, content')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true })
-        .limit(10); // Limit to last 10 messages for context
-
-      // Build messages array for Claude
-      const conversationHistory: Array<{role: 'user' | 'assistant', content: string}> = 
-        messages || [];
+      // Get smart context for the conversation
+      const conversationHistory = await this.getSmartContext(conversationId, content);
 
       // Add the new user message
       conversationHistory.push({ role: 'user', content });
@@ -321,18 +553,14 @@ Once the proxy server is running, refresh this page and try again!`;
         throw new Error(`Failed to save assistant message: ${assistantError.message}`);
       }
 
-      // Update conversation with title if it's the first exchange
-      if (conversationHistory.length <= 2) {
-        const title = await this.generateConversationTitle(assistantResponse, content);
-        const preview = this.generatePreview(content);
-        
-        await supabase
-          .from('chat_conversations')
-          .update({ 
-            title,
-            metadata: { preview }
-          })
-          .eq('id', conversationId);
+      // Periodically update summary (every 20 messages)
+      const { count } = await supabase
+        .from('chat_messages')
+        .select('id', { count: 'exact' })
+        .eq('conversation_id', conversationId);
+
+      if (count && count % 20 === 0) {
+        await this.summarizeConversation(conversationId);
       }
 
       return {

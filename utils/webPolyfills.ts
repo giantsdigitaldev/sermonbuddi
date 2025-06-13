@@ -2,6 +2,16 @@
 import { Platform } from 'react-native';
 
 if (Platform.OS === 'web') {
+  // Suppress useNativeDriver warnings on web
+  const originalWarn = console.warn;
+  console.warn = (...args) => {
+    if (args[0] && typeof args[0] === 'string' && args[0].includes('useNativeDriver')) {
+      // Suppress useNativeDriver warnings on web
+      return;
+    }
+    originalWarn.apply(console, args);
+  };
+
   // Polyfill for global if it doesn't exist
   if (typeof global === 'undefined') {
     (window as any).global = window;

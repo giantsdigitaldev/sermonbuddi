@@ -189,6 +189,8 @@ const loadSecondaryIcons = () => {
     videoCamera2: require("../assets/icons/video-camera-2.png"),
     videoCamera2Off: require("../assets/icons/video-camera-2-off.png"),
     editPencil: require("../assets/icons/edit_pencil.png"),
+    editText: require("../assets/icons/edit-text.png"),
+    edit: require("../assets/icons/edit_pencil.png"),
     signature: require("../assets/icons/signature.png"),
     bookmark2: require("../assets/icons/bookmark2.png"),
     bookmark2Outline: require("../assets/icons/bookmark2-outline.png"),

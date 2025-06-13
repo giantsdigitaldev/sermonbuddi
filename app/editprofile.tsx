@@ -11,35 +11,59 @@ import DatePickerModal from '../components/DatePickerModal';
 import Header from '../components/Header';
 import Input from '../components/Input';
 import { COLORS, FONTS, icons, images, SIZES } from '../constants';
+import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../theme/ThemeProvider';
 import { validateInput } from '../utils/actions/formActions';
-import { launchImagePicker } from '../utils/ImagePickerHelper';
+import { ProfileService } from '../utils/profileService';
 import { reducer } from '../utils/reducers/formReducers';
+import { StorageTest } from '../utils/storageTest';
 
-interface Item {
+interface CountryItem {
     flag: string;
     item: string;
-    code: string
+    code: string;
+    callingCode: string;
 }
 
 interface RenderItemProps {
-    item: Item;
+    item: CountryItem;
 }
 
-const isTestMode = true;
+// Static country data to avoid API dependency
+const COUNTRIES_DATA: CountryItem[] = [
+    { code: "US", item: "United States", callingCode: "+1", flag: "🇺🇸" },
+    { code: "CA", item: "Canada", callingCode: "+1", flag: "🇨🇦" },
+    { code: "GB", item: "United Kingdom", callingCode: "+44", flag: "🇬🇧" },
+    { code: "AU", item: "Australia", callingCode: "+61", flag: "🇦🇺" },
+    { code: "DE", item: "Germany", callingCode: "+49", flag: "🇩🇪" },
+    { code: "FR", item: "France", callingCode: "+33", flag: "🇫🇷" },
+    { code: "JP", item: "Japan", callingCode: "+81", flag: "🇯🇵" },
+    { code: "KR", item: "South Korea", callingCode: "+82", flag: "🇰🇷" },
+    { code: "CN", item: "China", callingCode: "+86", flag: "🇨🇳" },
+    { code: "IN", item: "India", callingCode: "+91", flag: "🇮🇳" },
+    { code: "BR", item: "Brazil", callingCode: "+55", flag: "🇧🇷" },
+    { code: "MX", item: "Mexico", callingCode: "+52", flag: "🇲🇽" },
+    { code: "ES", item: "Spain", callingCode: "+34", flag: "🇪🇸" },
+    { code: "IT", item: "Italy", callingCode: "+39", flag: "🇮🇹" },
+    { code: "NL", item: "Netherlands", callingCode: "+31", flag: "🇳🇱" },
+];
+
+const isTestMode = false;
 
 const initialState = {
     inputValues: {
-        fullName: isTestMode ? 'John Doe' : '',
-        email: isTestMode ? 'example@gmail.com' : '',
-        nickname: isTestMode ? "" : "",
-        phoneNumber: ''
+        fullName: '',
+        email: '',
+        nickname: '',
+        phoneNumber: '',
+        occupation: '',
     },
     inputValidities: {
         fullName: false,
         email: false,
         nickname: false,
         phoneNumber: false,
+        occupation: false,
     },
     formIsValid: false,
 }
@@ -47,14 +71,17 @@ const initialState = {
 // Edit Profile Screen
 const EditProfile = () => {
     const navigation = useNavigation<NavigationProp<any>>();
+    const { user } = useAuth();
     const [image, setImage] = useState<any>(null);
     const [error, setError] = useState();
     const [formState, dispatchFormState] = useReducer(reducer, initialState);
-    const [areas, setAreas] = useState([]);
-    const [selectedArea, setSelectedArea] = useState<any>(null);
+    const [areas, setAreas] = useState<CountryItem[]>(COUNTRIES_DATA);
+    const [selectedArea, setSelectedArea] = useState<CountryItem | null>(null);
     const [modalVisible, setModalVisible] = useState(false);
     const [openStartDatePicker, setOpenStartDatePicker] = useState(false);
     const [selectedGender, setSelectedGender] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [profileData, setProfileData] = useState<any>(null);
     const { dark } = useTheme();
 
     const genderOptions = [
@@ -94,67 +121,183 @@ const EditProfile = () => {
         }
     }, [error]);
 
-    const pickImage = async () => {
-        try {
-            const tempUri = await launchImagePicker()
-
-            if (!tempUri) return
-
-            // Set the image
-            setImage({ uri: tempUri })
-        } catch (error) { }
-    };
-
-    // Fectch codes from rescountries api
+    // Load user profile data
     useEffect(() => {
-        fetch("https://restcountries.com/v2/all")
-            .then(response => response.json())
-            .then(data => {
-                let areaData = data.map((item: any) => {
-                    return {
-                        code: item.alpha2Code,
-                        item: item.name,
-                        callingCode: `+${item.callingCodes[0]}`,
-                        flag: `https://flagsapi.com/${item.alpha2Code}/flat/64.png`
+        const loadProfile = async () => {
+            if (!user) return;
+            
+            try {
+                // Test storage access on component load
+                const storageTest = await StorageTest.testStorageAccess();
+                if (!storageTest.success) {
+                    console.warn('Storage access issue:', storageTest.error);
+                    // Don't block the UI, just log the warning
+                }
+                
+                const response = await ProfileService.getProfile();
+                if (response.success && response.data) {
+                    const profile = response.data;
+                    setProfileData(profile);
+                    
+                    // Update form state with existing data from profile
+                    dispatchFormState({
+                        inputId: 'fullName',
+                        validationResult: true,
+                        inputValue: profile.full_name || user.user_metadata?.full_name || '',
+                    });
+                    
+                    dispatchFormState({
+                        inputId: 'email',
+                        validationResult: true,
+                        inputValue: user.email || '',
+                    });
+                    
+                    dispatchFormState({
+                        inputId: 'nickname',
+                        validationResult: true,
+                        inputValue: profile.username || '',
+                    });
+                    
+                    // Load extended fields from user metadata
+                    dispatchFormState({
+                        inputId: 'occupation',
+                        validationResult: true,
+                        inputValue: user.user_metadata?.occupation || '',
+                    });
+                    
+                    if (profile.avatar_url) {
+                        setImage({ uri: profile.avatar_url });
                     }
-                });
-
-                setAreas(areaData);
-                if (areaData.length > 0) {
-                    let defaultData = areaData.filter((a: any) => a.code == "US");
-
-                    if (defaultData.length > 0) {
-                        setSelectedArea(defaultData[0])
+                    
+                    if (user.user_metadata?.gender) {
+                        setSelectedGender(user.user_metadata.gender);
+                    }
+                    
+                    if (user.user_metadata?.date_of_birth) {
+                        setStartedDate(user.user_metadata.date_of_birth);
+                    }
+                    
+                    if (user.user_metadata?.phone_number) {
+                        dispatchFormState({
+                            inputId: 'phoneNumber',
+                            validationResult: true,
+                            inputValue: user.user_metadata.phone_number,
+                        });
                     }
                 }
-            })
-    }, [])
+            } catch (error) {
+                console.error('Error loading profile:', error);
+            }
+        };
+
+        loadProfile();
+    }, [user]);
+
+    useEffect(() => {
+        // Set default country (US)
+        const defaultCountry = COUNTRIES_DATA.find(country => country.code === "US");
+        if (defaultCountry) {
+            setSelectedArea(defaultCountry);
+        }
+    }, []);
+
+    const pickImage = async () => {
+        try {
+            if (!user) {
+                Alert.alert('Error', 'No user session found');
+                return;
+            }
+
+            // Use ProfileService's image picker for web compatibility
+            const result = await ProfileService.pickAndUploadProfileImage(user.id);
+            
+            if (result.success && result.url) {
+                // Set the uploaded image URL
+                setImage({ uri: result.url });
+                Alert.alert('Success', 'Image uploaded successfully!');
+            } else if (result.error && !result.error.includes('cancelled')) {
+                console.error('Image upload failed:', result.error);
+                Alert.alert('Upload Failed', result.error);
+            }
+        } catch (error: any) { 
+            console.error('Error picking/uploading image:', error);
+            Alert.alert('Error', 'Failed to pick or upload image');
+        }
+    };
+
+    const handleUpdateProfile = async () => {
+        if (!user) {
+            Alert.alert('Error', 'No user session found');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            // Validate profile data - only store basic fields in database
+            const updateData = {
+                full_name: formState.inputValues.fullName.trim(),
+                username: formState.inputValues.nickname.trim(),
+                website: '', // Can be added later if needed
+                avatar_url: image?.uri || profileData?.avatar_url, // Include current image URL
+                // Extended fields will be stored in user metadata
+                phone_number: selectedArea ? 
+                    `${selectedArea.callingCode}${formState.inputValues.phoneNumber}` : 
+                    formState.inputValues.phoneNumber,
+                occupation: formState.inputValues.occupation.trim(),
+                gender: selectedGender,
+                date_of_birth: startedDate,
+            };
+
+            // Validate the data
+            const validation = ProfileService.validateProfileData(updateData);
+            if (!validation.isValid) {
+                Alert.alert('Validation Error', validation.errors.join('\n'));
+                setLoading(false);
+                return;
+            }
+
+            // Update profile using ProfileService
+            const response = await ProfileService.updateProfile(
+                updateData,
+                undefined // Don't pass imageUri since image is already uploaded
+            );
+            
+            if (response.success) {
+                Alert.alert(
+                    'Success', 
+                    'Profile updated successfully!', 
+                    [{ text: 'OK', onPress: () => navigation.goBack() }]
+                );
+            } else {
+                Alert.alert('Error', response.error || 'Failed to update profile');
+            }
+        } catch (error: any) {
+            console.error('Error updating profile:', error);
+            Alert.alert('Error', error.message || 'Failed to update profile');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     // Render countries codes modal
     function RenderAreasCodesModal() {
-
         const renderItem = ({ item }: RenderItemProps) => {
             return (
                 <TouchableOpacity
                     style={{
                         padding: 10,
-                        flexDirection: "row"
+                        flexDirection: "row",
+                        alignItems: "center"
                     }}
                     onPress={() => {
-                        setSelectedArea(item),
-                            setModalVisible(false)
+                        setSelectedArea(item);
+                        setModalVisible(false);
                     }}
                 >
-                    <Image
-                        source={{ uri: item.flag }}
-                        resizeMode='contain'
-                        style={{
-                            height: 30,
-                            width: 30,
-                            marginRight: 10
-                        }}
-                    />
-                    <Text style={{ fontSize: 16, color: "#fff" }}>{item.item}</Text>
+                    <Text style={{ fontSize: 24, marginRight: 10 }}>{item.flag}</Text>
+                    <Text style={{ fontSize: 16, color: dark ? COLORS.white : COLORS.black, flex: 1 }}>
+                        {item.item} ({item.callingCode})
+                    </Text>
                 </TouchableOpacity>
             )
         }
@@ -167,15 +310,20 @@ const EditProfile = () => {
                 <TouchableWithoutFeedback
                     onPress={() => setModalVisible(false)}>
                     <View
-                        style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                        style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: 'rgba(0,0,0,0.5)' }}>
                         <View
                             style={{
                                 height: 400,
                                 width: SIZES.width * 0.8,
-                                backgroundColor: COLORS.primary,
+                                backgroundColor: dark ? COLORS.dark2 : COLORS.white,
                                 borderRadius: 12
                             }}
                         >
+                            <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: dark ? COLORS.greyScale800 : COLORS.grayscale200 }}>
+                                <Text style={{ fontSize: 18, fontFamily: 'semiBold', color: dark ? COLORS.white : COLORS.black, textAlign: 'center' }}>
+                                    Select Country
+                                </Text>
+                            </View>
                             <FlatList
                                 data={areas}
                                 renderItem={renderItem}
@@ -221,13 +369,15 @@ const EditProfile = () => {
                             errorText={formState.inputValidities['fullName']}
                             placeholder="Full Name"
                             placeholderTextColor={dark ? COLORS.grayTie : COLORS.black}
+                            value={formState.inputValues.fullName}
                         />
                         <Input
                             id="nickname"
                             onInputChanged={inputChangedHandler}
                             errorText={formState.inputValidities['nickname']}
-                            placeholder="Nickname"
+                            placeholder="Username"
                             placeholderTextColor={dark ? COLORS.grayTie : COLORS.black}
+                            value={formState.inputValues.nickname}
                         />
                         <Input
                             id="email"
@@ -235,7 +385,11 @@ const EditProfile = () => {
                             errorText={formState.inputValidities['email']}
                             placeholder="Email"
                             placeholderTextColor={dark ? COLORS.grayTie : COLORS.black}
-                            keyboardType="email-address" />
+                            keyboardType="email-address"
+                            value={formState.inputValues.email}
+                            editable={false} // Email shouldn't be editable in profile
+                            style={{ opacity: 0.7 }}
+                        />
                         <View style={{
                             width: SIZES.width - 32
                         }}>
@@ -259,34 +413,34 @@ const EditProfile = () => {
                                 onPress={() => setModalVisible(true)}>
                                 <View style={{ justifyContent: "center" }}>
                                     <Image
-                                        source={icons.down}
+                                        source={icons.arrowDown}
                                         resizeMode='contain'
                                         style={styles.downIcon}
                                     />
                                 </View>
                                 <View style={{ justifyContent: "center", marginLeft: 5 }}>
-                                    <Image
-                                        source={{ uri: selectedArea?.flag }}
-                                        resizeMode="contain"
-                                        style={styles.flagIcon}
-                                    />
+                                    <Text style={{ fontSize: 20 }}>{selectedArea?.flag || "🇺🇸"}</Text>
                                 </View>
                                 <View style={{ justifyContent: "center", marginLeft: 5 }}>
-                                    <Text style={{ color: dark ? COLORS.white : "#111", fontSize: 12 }}>{selectedArea?.callingCode}</Text>
+                                    <Text style={{ color: dark ? COLORS.white : "#111", fontSize: 12 }}>
+                                        {selectedArea?.callingCode || "+1"}
+                                    </Text>
                                 </View>
                             </TouchableOpacity>
                             {/* Phone Number Text Input */}
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, { color: dark ? COLORS.white : "#111" }]}
                                 placeholder="Enter your phone number"
                                 placeholderTextColor={dark ? COLORS.grayTie : COLORS.black}
                                 selectionColor="#111"
                                 keyboardType="numeric"
+                                value={formState.inputValues.phoneNumber}
+                                onChangeText={(text) => inputChangedHandler('phoneNumber', text)}
                             />
                         </View>
                         <View>
                             <RNPickerSelect
-                                placeholder={{ label: 'Select', value: '' }}
+                                placeholder={{ label: 'Select Gender', value: '' }}
                                 items={genderOptions}
                                 onValueChange={(value) => handleGenderChange(value)}
                                 value={selectedGender}
@@ -295,7 +449,7 @@ const EditProfile = () => {
                                         fontSize: 16,
                                         paddingHorizontal: 10,
                                         borderRadius: 4,
-                                        color: COLORS.greyscale600,
+                                        color: dark ? COLORS.white : COLORS.greyscale600,
                                         paddingRight: 30,
                                         height: 52,
                                         width: SIZES.width - 32,
@@ -306,7 +460,7 @@ const EditProfile = () => {
                                         fontSize: 16,
                                         paddingHorizontal: 10,
                                         borderRadius: 8,
-                                        color: COLORS.greyscale600,
+                                        color: dark ? COLORS.white : COLORS.greyscale600,
                                         paddingRight: 30,
                                         height: 52,
                                         width: SIZES.width - 32,
@@ -322,6 +476,7 @@ const EditProfile = () => {
                             errorText={formState.inputValidities['occupation']}
                             placeholder="Occupation"
                             placeholderTextColor={dark ? COLORS.grayTie : COLORS.black}
+                            value={formState.inputValues.occupation}
                         />
                     </View>
                 </ScrollView>
@@ -336,10 +491,11 @@ const EditProfile = () => {
             {RenderAreasCodesModal()}
             <View style={styles.bottomContainer}>
                 <Button
-                    title="Update"
+                    title={loading ? "Updating..." : "Update Profile"}
                     filled
                     style={styles.continueButton}
-                    onPress={() => navigation.goBack()}
+                    onPress={handleUpdateProfile}
+                    disabled={loading}
                 />
             </View>
         </SafeAreaView>

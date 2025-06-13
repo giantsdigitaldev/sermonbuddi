@@ -117,7 +117,7 @@ const TabsContent = React.memo(() => {
               focused={focused}
               activeIcon={icons.document2}
               inactiveIcon={icons.document2Outline}
-              label="Project"
+              label="Projects"
               dark={dark}
             />
           ),

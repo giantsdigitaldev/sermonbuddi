@@ -114,9 +114,9 @@ const HomeScreen = () => {
    */
   const renderRecentProject = () => {
     return (
-      <View style={{ backgroundColor: dark ? COLORS.dark1 : COLORS.tertiaryWhite }}>
+      <View style={{ backgroundColor: dark ? COLORS.dark1 : COLORS.white }}>
         <SubHeaderItem
-          title="Recent Project"
+          title="Recent Projects"
           navTitle="See All"
           onPress={() => navigation.navigate("recentprojects")}
         />
@@ -158,7 +158,7 @@ const HomeScreen = () => {
     return (
       <View style={{ backgroundColor: dark ? COLORS.dark1 : COLORS.tertiaryWhite }}>
         <SubHeaderItem
-          title="Today Task"
+          title="Today's Tasks"
           navTitle="See All"
           onPress={() => navigation.navigate("todaytask")}
         />

@@ -1,12 +1,13 @@
-import { View, Text, StyleSheet, Image, TouchableOpacity, ImageSourcePropType, FlatList } from 'react-native';
-import React from 'react';
 import { COLORS, icons, images, SIZES } from '@/constants';
-import { StatusBar } from 'expo-status-bar';
-import { useNavigation } from 'expo-router';
-import { NavigationProp } from '@react-navigation/native';
-import * as Progress from 'react-native-progress';
 import { useTheme } from '@/theme/ThemeProvider';
+import { Project, ProjectService, Task } from '@/utils/projectService';
 import { Ionicons } from '@expo/vector-icons';
+import { NavigationProp } from '@react-navigation/native';
+import { useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, Image, ImageSourcePropType, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import * as Progress from 'react-native-progress';
 import { ScrollView } from 'react-native-virtualized-view';
 
 const colors = {
@@ -17,73 +18,85 @@ const colors = {
   completed: COLORS.greeen
 };
 
-interface Task {
-  id: string;
-  title: string;
-  dueDate: string;
-  participants: string[];
-  comments: number;
-  attachments: number;
-};
-
-const tasks: Task[] = [
-  {
-    id: "1",
-    title: "Brainstorming",
-    dueDate: "Dec 15, 2024",
-    participants: [images.user1, images.user2, images.user3],
-    comments: 6,
-    attachments: 3,
-  },
-  {
-    id: "2",
-    title: "Design Explore",
-    dueDate: "Dec 15, 2024",
-    participants: [images.user2, images.user3, images.user3, images.user5, images.user6],
-    comments: 7,
-    attachments: 5,
-  },
-  {
-    id: "3",
-    title: "References",
-    dueDate: "Dec 16, 2024",
-    participants: [images.user5, images.user7],
-    comments: 12,
-    attachments: 9,
-  },
-  {
-    id: "4",
-    title: "Create Design Flow",
-    dueDate: "Dec 16, 2024",
-    participants: [images.user3, images.user1, images.user3],
-    comments: 15,
-    attachments: 4,
-  },
-  {
-    id: "5",
-    title: "Create Figma Design",
-    dueDate: "Dec 16, 2024",
-    participants: [images.user3, images.user1, images.user4],
-    comments: 12,
-    attachments: 2,
-  },
-  {
-    id: "6",
-    title: "Build Frontend App",
-    dueDate: "Dec 16, 2024",
-    participants: [images.user3, images.user1],
-    comments: 19,
-    attachments: 3,
-  },
-];
-
-const TaskCard: React.FC<{ task: Task }> = ({ task }) => {
+const TaskCard: React.FC<{ 
+  task: Task; 
+  onPress: () => void;
+  onEdit: (field: string, value: any) => void;
+  onDelete: () => void;
+}> = ({ task, onPress, onEdit, onDelete }) => {
   const navigation = useNavigation<NavigationProp<any>>();
   const { dark } = useTheme();
 
+  const handleMorePress = () => {
+    Alert.alert(
+      'Task Options',
+      'What would you like to do?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Edit Title', 
+          onPress: () => {
+            Alert.prompt(
+              'Edit Task Title',
+              'Enter new task title:',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { 
+                  text: 'Save', 
+                  onPress: (text) => {
+                    if (text && text.trim()) {
+                      onEdit('title', text.trim());
+                    }
+                  }
+                }
+              ],
+              'plain-text',
+              task.title
+            );
+          }
+        },
+        { 
+          text: 'Change Status', 
+          onPress: () => {
+            Alert.alert(
+              'Change Status',
+              'Select new status:',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'To Do', onPress: () => onEdit('status', 'todo') },
+                { text: 'In Progress', onPress: () => onEdit('status', 'in_progress') },
+                { text: 'Completed', onPress: () => onEdit('status', 'completed') }
+              ]
+            );
+          }
+        },
+        { 
+          text: 'Change Priority', 
+          onPress: () => {
+            Alert.alert(
+              'Change Priority',
+              'Select new priority:',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Low', onPress: () => onEdit('priority', 'low') },
+                { text: 'Medium', onPress: () => onEdit('priority', 'medium') },
+                { text: 'High', onPress: () => onEdit('priority', 'high') }
+              ]
+            );
+          }
+        },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: onDelete
+        }
+      ]
+    );
+  };
+
   return (
     <TouchableOpacity
-      onPress={() => navigation.navigate("projectdetailsboarddetails")}
+      onPress={onPress}
       style={[styles.card, {
         backgroundColor: dark ? COLORS.dark2 : "#fff",
       }]}>
@@ -92,7 +105,7 @@ const TaskCard: React.FC<{ task: Task }> = ({ task }) => {
         <Text style={[styles.cardTitle, {
           color: dark ? COLORS.white : "#333",
         }]}>{task.title}</Text>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={handleMorePress}>
           <Ionicons name="ellipsis-horizontal" size={20} color={dark ? COLORS.white : "#333"} />
         </TouchableOpacity>
       </View>
@@ -100,50 +113,209 @@ const TaskCard: React.FC<{ task: Task }> = ({ task }) => {
       {/* Due Date */}
       <Text style={[styles.dueDate, {
         color: dark ? COLORS.grayscale200 : "#777",
-      }]}>Due date: {task.dueDate}</Text>
+      }]}>Due date: {task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No due date'}</Text>
 
-      {/* Participants Avatars */}
-      <View style={styles.avatars}>
-        {task.participants.map((avatar, index) => (
-          <Image key={index} source={avatar as ImageSourcePropType} style={styles.avatar} />
-        ))}
+      {/* Status and Priority */}
+      <View style={styles.statusContainer}>
+        <View style={[styles.statusBadge, { 
+          backgroundColor: task.status === 'completed' ? colors.completed : 
+                          task.status === 'in_progress' ? colors.intermediate : colors.weak 
+        }]}>
+          <Text style={styles.statusText}>{task.status.replace('_', ' ')}</Text>
+        </View>
+        <View style={[styles.priorityBadge, { 
+          backgroundColor: task.priority === 'high' ? colors.intermediate : 
+                          task.priority === 'medium' ? colors.medium : colors.weak 
+        }]}>
+          <Text style={styles.priorityText}>{task.priority}</Text>
+        </View>
       </View>
 
       {/* Comments & Attachments */}
       <View style={styles.footer}>
         <View style={styles.iconGroup}>
           <Ionicons name="chatbubble-outline" size={18} color={dark ? COLORS.greyscale300 : "#333"} />
-          <Text style={[styles.iconText, { color: dark ? COLORS.greyscale300 : "#333" }]}>{task.comments}</Text>
+          <Text style={[styles.iconText, { color: dark ? COLORS.greyscale300 : "#333" }]}>
+            {task.metadata?.comments || 0}
+          </Text>
         </View>
         <View style={styles.iconGroup}>
           <Ionicons name="attach-outline" size={18} color={dark ? COLORS.greyscale300 : "#333"} />
           <Text style={[styles.iconText, {
             color: dark ? COLORS.greyscale300 : "#333",
-          }]}>{task.attachments}</Text>
+          }]}>{task.metadata?.attachments || 0}</Text>
         </View>
       </View>
     </TouchableOpacity>
   );
 };
 
-
 const ProjectDetails = () => {
-  const members = [images.user1, images.user2, images.user3];
+  const params = useLocalSearchParams();
+  const projectId = params.projectId as string;
   const navigation = useNavigation<NavigationProp<any>>();
   const { dark } = useTheme();
-  const numberOfTask = 18;
-  const numberOfTaskCompleted = 15;
-  const progress = numberOfTaskCompleted / numberOfTask;
-  const numberOfDaysLeft = 15;
+  
+  const [project, setProject] = useState<Project | null>(null);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Load project and tasks
+  const loadProjectData = useCallback(async () => {
+    if (!projectId) return;
+    
+    try {
+      setLoading(true);
+      const [projectData, tasksData] = await Promise.all([
+        ProjectService.getProject(projectId),
+        ProjectService.getProjectTasks(projectId)
+      ]);
+      
+      setProject(projectData);
+      setTasks(tasksData);
+      
+      // Update project progress
+      if (projectData) {
+        await ProjectService.updateProjectProgress(projectId);
+      }
+    } catch (error) {
+      console.error('Error loading project data:', error);
+      Alert.alert('Error', 'Failed to load project data');
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    loadProjectData();
+  }, [loadProjectData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadProjectData();
+    }, [loadProjectData])
+  );
+
+  // Handle task edit
+  const handleTaskEdit = async (task: Task, field: string, value: any) => {
+    try {
+      const updatedTask = await ProjectService.updateTask(task.id, { [field]: value });
+      if (updatedTask) {
+        setTasks(prev => prev.map(t => t.id === task.id ? updatedTask : t));
+        // Update project progress after task change
+        await ProjectService.updateProjectProgress(projectId);
+        loadProjectData(); // Reload to get updated progress
+      } else {
+        Alert.alert('Error', 'Failed to update task');
+      }
+    } catch (error) {
+      console.error('Error updating task:', error);
+      Alert.alert('Error', 'Failed to update task');
+    }
+  };
+
+  // Handle task delete
+  const handleTaskDelete = async (taskId: string) => {
+    Alert.alert(
+      'Delete Task',
+      'Are you sure you want to delete this task?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const success = await ProjectService.deleteTask(taskId);
+              if (success) {
+                setTasks(prev => prev.filter(t => t.id !== taskId));
+                await ProjectService.updateProjectProgress(projectId);
+                loadProjectData();
+              } else {
+                Alert.alert('Error', 'Failed to delete task');
+              }
+            } catch (error) {
+              console.error('Error deleting task:', error);
+              Alert.alert('Error', 'Failed to delete task');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // Handle project edit
+  const handleProjectEdit = async (field: string, value: any) => {
+    if (!project) return;
+    
+    try {
+      let updatedProject: Partial<Project>;
+      
+      if (field === 'name' || field === 'description' || field === 'status') {
+        updatedProject = { [field]: value };
+      } else {
+        updatedProject = {
+          metadata: {
+            ...project.metadata,
+            [field]: value
+          }
+        };
+      }
+
+      const result = await ProjectService.updateProject(project.id, updatedProject);
+      if (result) {
+        setProject(result);
+      } else {
+        Alert.alert('Error', 'Failed to update project');
+      }
+    } catch (error) {
+      console.error('Error updating project:', error);
+      Alert.alert('Error', 'Failed to update project');
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor: dark ? COLORS.dark1 : COLORS.white }]}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={[styles.loadingText, { color: dark ? COLORS.white : COLORS.greyscale900 }]}>
+          Loading project...
+        </Text>
+      </View>
+    );
+  }
+
+  if (!project) {
+    return (
+      <View style={[styles.errorContainer, { backgroundColor: dark ? COLORS.dark1 : COLORS.white }]}>
+        <Text style={[styles.errorText, { color: dark ? COLORS.white : COLORS.greyscale900 }]}>
+          Project not found
+        </Text>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.backButtonText}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const members = project.metadata?.members || [];
+  const numberOfTask = tasks.length;
+  const numberOfTaskCompleted = tasks.filter(task => task.status === 'completed').length;
+  const progress = numberOfTask > 0 ? numberOfTaskCompleted / numberOfTask : 0;
+  const numberOfDaysLeft = project.metadata?.days_left || 
+    (project.metadata?.end_date ? ProjectService.calculateDaysLeft(project.metadata.end_date) : 0);
 
   return (
     <View style={{ flex: 1 }}>
       <StatusBar hidden />
-      <Image source={images.projectImage} style={styles.banner} />
-      {/* Header  */}
+      <Image source={project.metadata?.image ? { uri: project.metadata.image } : images.projectImage} style={styles.banner} />
+      
+      {/* Header */}
       <View style={styles.headerContainer}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
           <Image
             source={icons.back}
             resizeMode='contain'
@@ -151,14 +323,77 @@ const ProjectDetails = () => {
           />
         </TouchableOpacity>
         <View style={styles.rightContainer}>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => {
+            Alert.prompt(
+              'Edit Project Name',
+              'Enter new project name:',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { 
+                  text: 'Save', 
+                  onPress: (text) => {
+                    if (text && text.trim()) {
+                      handleProjectEdit('name', text.trim());
+                    }
+                  }
+                }
+              ],
+              'plain-text',
+              project.name
+            );
+          }}>
             <Image
-              source={icons.search}
+              source={icons.edit}
               resizeMode='contain'
               style={styles.searchIcon}
             />
           </TouchableOpacity>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => {
+            Alert.alert(
+              'Project Options',
+              'What would you like to do?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { 
+                  text: 'Edit Description', 
+                  onPress: () => {
+                    Alert.prompt(
+                      'Edit Description',
+                      'Enter new description:',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        { 
+                          text: 'Save', 
+                          onPress: (text) => {
+                            if (text) {
+                              handleProjectEdit('description', text);
+                            }
+                          }
+                        }
+                      ],
+                      'plain-text',
+                      project.description
+                    );
+                  }
+                },
+                { 
+                  text: 'Change Status', 
+                  onPress: () => {
+                    Alert.alert(
+                      'Change Status',
+                      'Select new status:',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Active', onPress: () => handleProjectEdit('status', 'active') },
+                        { text: 'Completed', onPress: () => handleProjectEdit('status', 'completed') },
+                        { text: 'Archived', onPress: () => handleProjectEdit('status', 'archived') }
+                      ]
+                    );
+                  }
+                }
+              ]
+            );
+          }}>
             <Image
               source={icons.moreCircle}
               resizeMode='contain'
@@ -167,15 +402,16 @@ const ProjectDetails = () => {
           </TouchableOpacity>
         </View>
       </View>
+
       <View style={styles.header}>
         <View style={styles.logoContainer}>
-          <Image source={images.logo5} style={styles.logo} />
+          <Image source={project.metadata?.logo ? { uri: project.metadata.logo } : images.logo5} style={styles.logo} />
         </View>
         <View style={styles.membersContainer}>
           {members.slice(0, 3).map((member, index) => (
             <Image
               key={index}
-              source={member as ImageSourcePropType}
+              source={typeof member === 'string' ? { uri: member } : member as ImageSourcePropType}
               style={[styles.memberAvatar, { left: index * -14 }]}
             />
           ))}
@@ -190,10 +426,10 @@ const ProjectDetails = () => {
       <View style={[styles.container, { backgroundColor: dark ? COLORS.dark1 : COLORS.white }]}>
         <Text style={[styles.title, {
           color: dark ? COLORS.white : COLORS.greyscale900
-        }]}>Tiki Mobile App Project</Text>
+        }]}>{project.name}</Text>
         <Text style={[styles.subtitle, {
           color: dark ? COLORS.grayscale100 : COLORS.greyscale900
-        }]}>UI Kit Design Project for Task, Notes, and Reminder Mobile App - December 20, 2024</Text>
+        }]}>{project.description}</Text>
 
         {/* Progress bar item */}
         <View style={styles.progressContainer}>
@@ -207,10 +443,11 @@ const ProjectDetails = () => {
           </View>
           <Text style={[styles.daysLeft, {
             color: dark ? COLORS.grayscale400 : COLORS.grayscale700
-          }]}>{numberOfDaysLeft} Days Left, Dec 26 2026</Text>
+          }]}>{numberOfDaysLeft} Days Left</Text>
         </View>
+        
         <Progress.Bar
-          progress={numberOfTaskCompleted / numberOfTask}
+          progress={progress}
           width={null}
           height={8}
           unfilledColor={dark ? COLORS.grayscale700 : "#EEEEEE"}
@@ -225,7 +462,7 @@ const ProjectDetails = () => {
           }
         />
 
-        {/* Task Details  */}
+        {/* Task Details */}
         <ScrollView showsVerticalScrollIndicator={false}
           style={[styles.taskDetailsContainer, {
             backgroundColor: dark ? COLORS.dark1 : "#E9F0FF",
@@ -233,13 +470,37 @@ const ProjectDetails = () => {
           <FlatList
             data={tasks}
             keyExtractor={(item) => item.id}
-            renderItem={({ item }) => <TaskCard task={item} />}
+            renderItem={({ item }) => (
+              <TaskCard 
+                task={item} 
+                onPress={() => navigation.navigate("projectdetailsboarddetails", { 
+                  projectId: project.id, 
+                  taskId: item.id 
+                })}
+                onEdit={(field, value) => handleTaskEdit(item, field, value)}
+                onDelete={() => handleTaskDelete(item.id)}
+              />
+            )}
+            ListEmptyComponent={() => (
+              <View style={styles.emptyTasksContainer}>
+                <Text style={[styles.emptyTasksText, { color: dark ? COLORS.white : COLORS.greyscale900 }]}>
+                  No tasks yet
+                </Text>
+                <TouchableOpacity
+                  style={styles.addTaskButton}
+                  onPress={() => navigation.navigate("addnewtaskform", { projectId: project.id })}
+                >
+                  <Text style={styles.addTaskButtonText}>Add First Task</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           />
         </ScrollView>
       </View>
+      
       {/* Add Task Button */}
       <TouchableOpacity
-        onPress={() => navigation.navigate("addnewtaskform")}
+        onPress={() => navigation.navigate("addnewtaskform", { projectId: project.id })}
         style={styles.addIconContainer}>
         <Ionicons name="add" size={24} color="#FFF" />
       </TouchableOpacity>
@@ -285,7 +546,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: - 72,
+    marginTop: -72,
     marginLeft: 16,
     marginRight: 16,
   },
@@ -326,16 +587,11 @@ const styles = StyleSheet.create({
   },
   moreText: {
     color: COLORS.white,
-    fontSize: 24,
+    fontSize: 12,
     fontFamily: 'bold',
   },
-  moreIcon: {
-    height: 24,
-    width: 24,
-    tintColor: COLORS.greyscale900,
-  },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontFamily: 'bold',
     color: COLORS.greyscale900,
     marginTop: 20,
@@ -379,6 +635,7 @@ const styles = StyleSheet.create({
   taskDetailsContainer: {
     marginTop: 24,
     backgroundColor: "#E9F0FF",
+    flex: 1,
   },
   card: {
     backgroundColor: "#fff",
@@ -400,24 +657,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: "bold",
     color: "#333",
+    flex: 1,
   },
   dueDate: {
     fontSize: 14,
     color: "#777",
     marginVertical: 5,
     fontFamily: "regular",
-  },
-  avatars: {
-    flexDirection: "row",
-    marginTop: 10,
-  },
-  avatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    marginRight: -10,
-    borderWidth: 2,
-    borderColor: "#fff",
   },
   footer: {
     flexDirection: "row",
@@ -448,13 +694,87 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
-    elevation: 2, // For Android shadow
+    elevation: 5,
   },
-  addIcon: {
-    height: 24,
-    width: 24,
-    tintColor: COLORS.white,
-  }
-})
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    fontFamily: 'regular',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    fontSize: 18,
+    fontFamily: 'semiBold',
+    marginBottom: 20,
+  },
+  backButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  backButtonText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontFamily: 'semiBold',
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    marginVertical: 8,
+    gap: 8,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontFamily: 'semiBold',
+    textTransform: 'capitalize',
+  },
+  priorityBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  priorityText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontFamily: 'semiBold',
+    textTransform: 'capitalize',
+  },
+  emptyTasksContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyTasksText: {
+    fontSize: 16,
+    fontFamily: 'regular',
+    marginBottom: 16,
+  },
+  addTaskButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  addTaskButtonText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontFamily: 'semiBold',
+  },
+});
 
-export default ProjectDetails
+export default ProjectDetails;

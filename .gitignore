@@ -120,7 +120,6 @@ supabase/.temp
 
 # Local proxy server files
 server.js
-package.json
 package-lock.json
 start-with-ai.sh
 

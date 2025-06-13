@@ -1,25 +1,30 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image, ImageSourcePropType, FlatList, TextInput } from 'react-native';
-import React, { useRef, useState } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS, icons, images, SIZES } from '@/constants';
-import { useTheme } from '@/theme/ThemeProvider';
-import { useNavigation } from 'expo-router';
-import { NavigationProp } from '@react-navigation/native';
 import Button from '@/components/Button';
+import CommentCard from '@/components/CommentCard';
 import SubHeaderItem from '@/components/SubHeaderItem';
 import TaskCard from '@/components/TaskCard';
+import { COLORS, icons, images, SIZES } from '@/constants';
 import { projectComments, subTasks } from '@/data';
-import { ScrollView } from 'react-native-virtualized-view';
-import CommentCard from '@/components/CommentCard';
+import { useTheme } from '@/theme/ThemeProvider';
+import { Project, ProjectService, Task } from '@/utils/projectService';
 import { Ionicons } from '@expo/vector-icons';
-import RBSheet from "react-native-raw-bottom-sheet";
+import { NavigationProp } from '@react-navigation/native';
+import { useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, Image, ImageSourcePropType, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Calendar } from "react-native-calendars";
+import RBSheet from "react-native-raw-bottom-sheet";
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ScrollView } from 'react-native-virtualized-view';
 
 const statuses = ["To-Do", "In-Progress", "Revision", "Completed"];
 
 const ProjectDetailsBoardDetails = () => {
     const { colors, dark } = useTheme();
     const navigation = useNavigation<NavigationProp<any>>();
+    const params = useLocalSearchParams();
+    const projectId = params.projectId as string;
+    const taskId = params.taskId as string;
     const participants = [images.user2, images.user3, images.user4, images.user5, images.user6, images.user1, images.user7];
     const [comment, setComment] = useState("");
     const [selectedStatus, setSelectedStatus] = useState<string>("To-Do");
@@ -27,6 +32,11 @@ const ProjectDetailsBoardDetails = () => {
     const refAttachmentRBSheet = useRef<any>(null);
     const refDueDateRBSheet = useRef<any>(null);
     const [selectedDate, setSelectedDate] = useState("2024-12-14");
+    const [project, setProject] = useState<Project | null>(null);
+    const [task, setTask] = useState<Task | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [editingField, setEditingField] = useState<string | null>(null);
+    const [editValue, setEditValue] = useState('');
 
     const handleSend = () => {
         if (comment.trim().length > 0) {
@@ -39,6 +49,108 @@ const ProjectDetailsBoardDetails = () => {
     const handleToggle = (id: string, completed: boolean) => {
         setCompletedTasks((prev) => ({ ...prev, [id]: completed }));
     };
+
+    // Load project and task data
+    const loadData = useCallback(async () => {
+        if (!projectId || !taskId) return;
+        
+        try {
+            setLoading(true);
+            const [projectData, tasksData] = await Promise.all([
+                ProjectService.getProject(projectId),
+                ProjectService.getProjectTasks(projectId)
+            ]);
+            
+            setProject(projectData);
+            const currentTask = tasksData.find(t => t.id === taskId);
+            setTask(currentTask || null);
+        } catch (error) {
+            console.error('Error loading data:', error);
+            Alert.alert('Error', 'Failed to load task data');
+        } finally {
+            setLoading(false);
+        }
+    }, [projectId, taskId]);
+
+    useEffect(() => {
+        loadData();
+    }, [loadData]);
+
+    useFocusEffect(
+        useCallback(() => {
+            loadData();
+        }, [loadData])
+    );
+
+    // Handle task field edit
+    const handleTaskEdit = async (field: string, value: any) => {
+        if (!task) return;
+        
+        try {
+            const updatedTask = await ProjectService.updateTask(task.id, { [field]: value });
+            if (updatedTask) {
+                setTask(updatedTask);
+                // Update project progress after task change
+                await ProjectService.updateProjectProgress(projectId);
+            } else {
+                Alert.alert('Error', 'Failed to update task');
+            }
+        } catch (error) {
+            console.error('Error updating task:', error);
+            Alert.alert('Error', 'Failed to update task');
+        }
+    };
+
+    // Handle inline editing
+    const startEditing = (field: string, currentValue: string) => {
+        setEditingField(field);
+        setEditValue(currentValue);
+    };
+
+    const saveEdit = async () => {
+        if (!editingField || !task) return;
+        
+        await handleTaskEdit(editingField, editValue);
+        setEditingField(null);
+        setEditValue('');
+    };
+
+    const cancelEdit = () => {
+        setEditingField(null);
+        setEditValue('');
+    };
+
+    // Handle task delete
+    const handleTaskDelete = async () => {
+        if (!task) return;
+        
+        Alert.alert(
+            'Delete Task',
+            'Are you sure you want to delete this task?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            const success = await ProjectService.deleteTask(task.id);
+                            if (success) {
+                                await ProjectService.updateProjectProgress(projectId);
+                                navigation.goBack();
+                            } else {
+                                Alert.alert('Error', 'Failed to delete task');
+                            }
+                        } catch (error) {
+                            console.error('Error deleting task:', error);
+                            Alert.alert('Error', 'Failed to delete task');
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     /**
     * Render header
     */
@@ -81,8 +193,38 @@ const ProjectDetailsBoardDetails = () => {
         )
     };
 
+    if (loading) {
+        return (
+            <View style={[styles.loadingContainer, { backgroundColor: dark ? COLORS.dark1 : COLORS.white }]}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+                <Text style={[styles.loadingText, { color: dark ? COLORS.white : COLORS.greyscale900 }]}>
+                    Loading task...
+                </Text>
+            </View>
+        );
+    }
+
+    if (!project || !task) {
+        return (
+            <View style={[styles.errorContainer, { backgroundColor: dark ? COLORS.dark1 : COLORS.white }]}>
+                <Text style={[styles.errorText, { color: dark ? COLORS.white : COLORS.greyscale900 }]}>
+                    Task not found
+                </Text>
+                <TouchableOpacity 
+                    style={styles.backButton}
+                    onPress={() => navigation.goBack()}
+                >
+                    <Text style={styles.backButtonText}>Go Back</Text>
+                </TouchableOpacity>
+            </View>
+        );
+    }
+
+    const members = project.metadata?.members || [];
+
     return (
         <SafeAreaView style={[styles.area, { backgroundColor: colors.background }]}>
+            <StatusBar hidden />
             <View style={[styles.container, { backgroundColor: colors.background }]}>
                 {renderHeader()}
                 <ScrollView showsVerticalScrollIndicator={false}>
@@ -123,9 +265,14 @@ const ProjectDetailsBoardDetails = () => {
 
                                 {/* Participants Avatars */}
                                 <View style={styles.avatars}>
-                                    {participants.map((avatar, index) => (
-                                        <Image key={index} source={avatar as ImageSourcePropType} style={styles.avatar} />
+                                    {members.slice(0, 3).map((member, index) => (
+                                        <Image key={index} source={typeof member === 'string' ? { uri: member } : member as ImageSourcePropType} style={[styles.avatar, { left: index * -14 }]} />
                                     ))}
+                                    {members.length > 3 && (
+                                        <View style={styles.moreMembers}>
+                                            <Text style={styles.moreText}>+{members.length - 3}</Text>
+                                        </View>
+                                    )}
                                 </View>
                                 <TouchableOpacity
                                     onPress={() => navigation.navigate("projectdetailsteammenber")}
@@ -804,7 +951,53 @@ const styles = StyleSheet.create({
         paddingVertical: 10,
         paddingHorizontal: 24,
         width: SIZES.width - 32
-    }
-})
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    loadingText: {
+        marginTop: 16,
+        fontSize: 16,
+        fontFamily: 'regular',
+    },
+    errorContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    errorText: {
+        fontSize: 18,
+        fontFamily: 'semiBold',
+        marginBottom: 20,
+    },
+    backButton: {
+        backgroundColor: COLORS.primary,
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: 8,
+    },
+         backButtonText: {
+         color: COLORS.white,
+         fontSize: 16,
+         fontFamily: 'semiBold',
+     },
+     moreMembers: {
+         width: 30,
+         height: 30,
+         borderRadius: 15,
+         backgroundColor: COLORS.primary,
+         justifyContent: 'center',
+         alignItems: 'center',
+         marginLeft: 5,
+     },
+     moreText: {
+         color: COLORS.white,
+         fontSize: 12,
+         fontFamily: 'bold',
+     },
+ });
 
 export default ProjectDetailsBoardDetails

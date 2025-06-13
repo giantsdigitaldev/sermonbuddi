@@ -197,6 +197,21 @@ export class AuthService {
     }
   }
 
+  // Update user metadata
+  static async updateUser(updateData: { data: any }): Promise<any> {
+    try {
+      const { data, error } = await supabase.auth.updateUser(updateData);
+
+      if (error) {
+        return { error: error.message };
+      }
+
+      return { data, error: null };
+    } catch (error: any) {
+      return { error: error.message || 'An unexpected error occurred' };
+    }
+  }
+
   // Update user profile
   static async updateProfile(profileData: ProfileData): Promise<AuthResponse> {
     try {

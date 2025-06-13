@@ -1,20 +1,21 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-native';
-import React, { useCallback, useReducer, useState } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useTheme } from '@/theme/ThemeProvider';
-import { COLORS, FONTS, SIZES } from '@/constants';
-import Header from '@/components/Header';
 import Button from '@/components/Button';
-import { Feather, Ionicons } from '@expo/vector-icons';
-import { reducer } from '@/utils/reducers/formReducers';
-import { validateInput } from '@/utils/actions/formActions';
+import Header from '@/components/Header';
 import Input from '@/components/Input';
-import RNPickerSelect from 'react-native-picker-select';
-import { useNavigation } from 'expo-router';
-import { NavigationProp } from '@react-navigation/native';
-import DatePickerModal from '../components/DatePickerModal';
-import { getFormatedDate } from 'react-native-modern-datepicker';
+import { COLORS, FONTS, SIZES } from '@/constants';
+import { useTheme } from '@/theme/ThemeProvider';
+import { validateInput } from '@/utils/actions/formActions';
 import { launchImagePicker } from '@/utils/ImagePickerHelper';
+import { Project, ProjectService } from '@/utils/projectService';
+import { reducer } from '@/utils/reducers/formReducers';
+import { Feather, Ionicons } from '@expo/vector-icons';
+import { NavigationProp } from '@react-navigation/native';
+import { useLocalSearchParams, useNavigation } from 'expo-router';
+import React, { useCallback, useEffect, useReducer, useState } from 'react';
+import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { getFormatedDate } from 'react-native-modern-datepicker';
+import RNPickerSelect from 'react-native-picker-select';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import DatePickerModal from '../components/DatePickerModal';
 
 const isTestMode = true;
 
@@ -36,6 +37,8 @@ const AddNewTaskForm = () => {
     const [selectedProjectLeader, setSelectedProjectLeader] = useState<string>("");
     const [selectedTeamMember, setSelectedTeamMember] = useState<string>("");
     const navigation = useNavigation<NavigationProp<any>>();
+    const params = useLocalSearchParams();
+    const projectId = params.projectId as string;
     const today = new Date();
     const [image, setImage] = useState<any>(null);
     const [openStartDatePicker, setOpenStartDatePicker] = useState(false);
@@ -43,8 +46,10 @@ const AddNewTaskForm = () => {
         new Date(today.setDate(today.getDate() + 1)),
         "YYYY/MM/DD"
     );
-
     const [startedDate, setStartedDate] = useState("12/12/2023");
+    const [project, setProject] = useState<Project | null>(null);
+    const [loading, setLoading] = useState(false);
+
     const handleOnPressStartDate = () => {
         setOpenStartDatePicker(!openStartDatePicker);
     };
@@ -90,6 +95,77 @@ const AddNewTaskForm = () => {
             setImage({ uri: tempUri })
         } catch (error) { }
     };
+
+    // Load project data
+    useEffect(() => {
+        const loadProject = async () => {
+            if (projectId) {
+                const projectData = await ProjectService.getProject(projectId);
+                setProject(projectData);
+            }
+        };
+        loadProject();
+    }, [projectId]);
+
+    const handleSubmit = async () => {
+        // Validate required fields
+        if (!formState.inputValues.taskTitle.trim()) {
+            Alert.alert('Error', 'Task title is required');
+            return;
+        }
+
+        if (!projectId) {
+            Alert.alert('Error', 'Project ID is required');
+            return;
+        }
+
+        try {
+            setLoading(true);
+            
+            const taskData = {
+                project_id: projectId,
+                title: formState.inputValues.taskTitle.trim(),
+                description: formState.inputValues.taskDescription.trim() || undefined,
+                status: 'todo' as 'todo' | 'in_progress' | 'completed',
+                priority: 'medium' as 'low' | 'medium' | 'high',
+                due_date: formState.inputValues.due_date || undefined,
+                metadata: {
+                    section: formState.inputValues.section || undefined,
+                    comments: 0,
+                    attachments: 0,
+                    participants: []
+                }
+            };
+
+            const result = await ProjectService.createTask(taskData);
+            
+            if (result) {
+                // Update project progress
+                await ProjectService.updateProjectProgress(projectId);
+                
+                Alert.alert(
+                    'Success',
+                    'Task created successfully!',
+                    [
+                        {
+                            text: 'OK',
+                            onPress: () => {
+                                navigation.goBack();
+                            }
+                        }
+                    ]
+                );
+            } else {
+                Alert.alert('Error', 'Failed to create task');
+            }
+        } catch (error) {
+            console.error('Error creating task:', error);
+            Alert.alert('Error', 'Failed to create task');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <SafeAreaView style={[styles.area, { backgroundColor: colors.background }]}>
             <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -218,10 +294,11 @@ const AddNewTaskForm = () => {
                 borderTopColor: dark ? COLORS.dark1 : COLORS.grayscale100,
             }]}>
                 <Button
-                    title="Add New Task"
+                    title={loading ? 'Creating...' : 'Create Task'}
                     filled
                     style={styles.button}
-                    onPress={() => navigation.goBack()}
+                    onPress={handleSubmit}
+                    disabled={loading}
                 />
             </View>
             <DatePickerModal
