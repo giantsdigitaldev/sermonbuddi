@@ -51,57 +51,71 @@ export class ProfileService {
   // Upload image to Supabase Storage (Web and Mobile compatible)
   static async uploadProfileImage(imageUri: string, userId: string): Promise<{ success: boolean; url?: string; error?: string }> {
     try {
-      console.log('Starting image upload for user:', userId, 'Platform:', Platform.OS);
-      
+      console.log('Starting image upload for user:', userId);
+      console.log('Image URI:', imageUri);
+
       let arrayBuffer: ArrayBuffer;
-      let fileExt = 'jpg';
+      let fileExt: string;
 
       if (Platform.OS === 'web') {
-        // Web handling
-        try {
-          // For web, imageUri might be a blob URL or data URL
-          if (imageUri.startsWith('data:')) {
-            // Data URL
-            const base64Data = imageUri.split(',')[1];
-            arrayBuffer = decode(base64Data);
-            const mimeType = imageUri.split(';')[0].split(':')[1];
-            fileExt = mimeType.split('/')[1] || 'jpg';
-          } else {
-            // Blob URL - fetch and convert
-            const response = await fetch(imageUri);
-            arrayBuffer = await response.arrayBuffer();
-            fileExt = 'jpg'; // Default for blob URLs
-          }
-        } catch (error) {
-          console.error('Web file processing error:', error);
-          return { success: false, error: 'Failed to process image on web' };
+        // Web implementation
+        const response = await fetch(imageUri);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch image: ${response.statusText}`);
+        }
+        arrayBuffer = await response.arrayBuffer();
+        
+        // Try to determine file extension from the blob type or URI
+        const contentType = response.headers.get('content-type');
+        if (contentType?.includes('jpeg') || contentType?.includes('jpg')) {
+          fileExt = 'jpg';
+        } else if (contentType?.includes('png')) {
+          fileExt = 'png';
+        } else {
+          // Fallback to jpg
+          fileExt = 'jpg';
         }
       } else {
-        // Mobile handling with expo-file-system
+        // Mobile implementation
         if (!FileSystem) {
-          return { success: false, error: 'FileSystem not available' };
+          throw new Error('FileSystem not available on this platform');
         }
 
-        const fileInfo = await FileSystem.getInfoAsync(imageUri);
-        if (!fileInfo.exists) {
-          return { success: false, error: 'File does not exist' };
-        }
-
-        // Read file as base64
         const base64 = await FileSystem.readAsStringAsync(imageUri, {
           encoding: FileSystem.EncodingType.Base64,
         });
 
-        // Convert base64 to ArrayBuffer
         arrayBuffer = decode(base64);
         fileExt = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
       }
 
-      // Generate unique filename
-      const fileName = `profile-${userId}-${Date.now()}.${fileExt}`;
-      const filePath = `avatars/${fileName}`;
+      console.log('File extension:', fileExt);
+      console.log('Array buffer size:', arrayBuffer.byteLength);
 
-      console.log('Uploading file:', filePath);
+      const fileName = `avatar_${Date.now()}.${fileExt}`;
+      const filePath = `${userId}/avatars/${fileName}`;
+
+      console.log('Uploading file to path:', filePath);
+
+      // Test storage bucket access first
+      try {
+        const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
+        console.log('Available buckets:', buckets);
+        if (bucketsError) {
+          console.error('Error listing buckets:', bucketsError);
+        }
+        
+        const userContentBucket = buckets?.find(bucket => bucket.name === 'user-content');
+        if (!userContentBucket) {
+          console.error('user-content bucket not found. Available buckets:', buckets?.map(b => b.name));
+          return { 
+            success: false, 
+            error: 'Storage bucket "user-content" not found. Please run the database setup script to create the bucket.' 
+          };
+        }
+      } catch (bucketError) {
+        console.error('Error checking buckets:', bucketError);
+      }
 
       // Upload to Supabase Storage
       const { data, error } = await supabase.storage
@@ -111,8 +125,16 @@ export class ProfileService {
           upsert: true,
         });
 
+      console.log('Upload response:', { data, error });
+
       if (error) {
         console.error('Storage upload error:', error);
+        if (error.message.includes('new row violates row-level security policy')) {
+          return { 
+            success: false, 
+            error: 'Storage access denied. Please run the database setup script to configure storage policies.' 
+          };
+        }
         return { success: false, error: error.message };
       }
 
@@ -121,7 +143,15 @@ export class ProfileService {
         .from('user-content')
         .getPublicUrl(filePath);
 
-      console.log('Image uploaded successfully:', publicUrlData.publicUrl);
+      console.log('Public URL generated:', publicUrlData.publicUrl);
+      
+      // Test if the URL is accessible
+      try {
+        const testResponse = await fetch(publicUrlData.publicUrl, { method: 'HEAD' });
+        console.log('URL accessibility test:', testResponse.status, testResponse.statusText);
+      } catch (testError) {
+        console.warn('URL accessibility test failed:', testError);
+      }
       
       return { 
         success: true, 
@@ -152,18 +182,76 @@ export class ProfileService {
         .eq('id', targetUserId)
         .single();
 
-      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
-        return { success: false, error: error.message };
+      if (error) {
+        if (error.code === 'PGRST116') {
+          // Profile doesn't exist, create it
+          console.log('Profile not found, creating new profile...');
+          return await this.createProfile(targetUserId, user);
+        } else if (error.code === '42501') {
+          // Permission denied - RLS policy issue
+          console.error('Permission denied accessing profile. Check RLS policies.');
+          return { 
+            success: false, 
+            error: 'Profile access denied. Please check database permissions.' 
+          };
+        } else {
+          console.error('Error fetching profile:', error);
+          return { success: false, error: error.message };
+        }
       }
 
       return { 
         success: true, 
-        data: data || null 
+        data: data 
       };
     } catch (error: any) {
+      console.error('Profile fetch error:', error);
       return { 
         success: false, 
         error: error.message || 'Failed to fetch profile' 
+      };
+    }
+  }
+
+  // Create a new profile for the user
+  static async createProfile(userId: string, user: any): Promise<ProfileResponse> {
+    try {
+      const profileData = {
+        id: userId,
+        full_name: user?.user_metadata?.full_name || user?.user_metadata?.first_name && user?.user_metadata?.last_name 
+          ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}` 
+          : null,
+        username: user?.email?.split('@')[0] || null,
+        avatar_url: user?.user_metadata?.avatar_url || null,
+        website: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .insert(profileData)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating profile:', error);
+        return { 
+          success: false, 
+          error: `Failed to create profile: ${error.message}` 
+        };
+      }
+
+      console.log('Profile created successfully:', data);
+      return { 
+        success: true, 
+        data: data 
+      };
+    } catch (error: any) {
+      console.error('Profile creation error:', error);
+      return { 
+        success: false, 
+        error: error.message || 'Failed to create profile' 
       };
     }
   }
@@ -217,6 +305,14 @@ export class ProfileService {
         .single();
 
       if (error) {
+        if (error.code === '42501') {
+          // Permission denied - RLS policy issue
+          console.error('Permission denied updating profile. Check RLS policies.');
+          return { 
+            success: false, 
+            error: 'Profile update denied. Please check database permissions. You may need to run the database setup script first.' 
+          };
+        }
         console.error('Profile update error:', error);
         return { success: false, error: error.message };
       }

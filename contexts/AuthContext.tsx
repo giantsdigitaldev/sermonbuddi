@@ -1,5 +1,5 @@
 import { Session, User } from '@supabase/supabase-js';
-import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
+import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 import { AuthService } from '../utils/auth';
 
 interface AuthContextType {
@@ -12,6 +12,8 @@ interface AuthContextType {
   resetPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
   updatePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
   isAuthenticated: boolean;
+  refreshUser: () => Promise<void>;
+  refreshAvatar: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -24,6 +26,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [avatarRefreshTrigger, setAvatarRefreshTrigger] = useState(0);
+
+  const refreshAvatar = useCallback(() => {
+    setAvatarRefreshTrigger(prev => prev + 1);
+  }, []);
 
   useEffect(() => {
     // Get initial session
@@ -144,6 +151,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
+  const refreshUser = async () => {
+    try {
+      const session = await AuthService.getSession();
+      setSession(session);
+      setUser(session?.user ?? null);
+    } catch (error) {
+      console.error('Error refreshing user:', error);
+    }
+  };
+
   const value: AuthContextType = {
     user,
     session,
@@ -154,6 +171,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     resetPassword,
     updatePassword,
     isAuthenticated: !!user,
+    refreshUser,
+    refreshAvatar,
   };
 
   return (

@@ -1,8 +1,12 @@
 import ProjectCard from '@/components/ProjectCard';
 import { COLORS, icons, images, SIZES } from '@/constants';
+import { useAuth } from '@/contexts/AuthContext';
 import { categories } from '@/data';
+import { useRoutePredictiveCache } from '@/hooks/usePredictiveCache';
 import { useTheme } from '@/theme/ThemeProvider';
+import { cacheService } from '@/utils/cacheService';
 import { Project, ProjectService } from '@/utils/projectService';
+import { supabase } from '@/utils/supabase';
 import { NavigationProp } from '@react-navigation/native';
 import { useFocusEffect, useNavigation } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -16,31 +20,78 @@ interface Category {
 }
 
 const ProjectPage = () => {
-  const { dark } = useTheme();
+  const { dark, colors } = useTheme();
+  const { user } = useAuth(); // Get current user from auth context
   const navigation = useNavigation<NavigationProp<any>>();
   const [selectedCategories, setSelectedCategories] = useState<string[]>(["1"]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Load projects from database
-  const loadProjects = useCallback(async () => {
+  // 🚀 PREDICTIVE CACHE: Track projects page behavior
+  useRoutePredictiveCache('projects');
+
+  // 🚀 OPTIMIZED: Load projects with instant caching
+  const loadProjects = useCallback(async (forceRefresh = false) => {
+    if (!user?.id) {
+      console.log('No user ID available, using mock data');
+      setProjects(ProjectService.getMockProjects());
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
-      const projectsData = await ProjectService.getProjects();
-      setProjects(projectsData);
+      
+      // Use optimized caching service for instant loading
+      const projectsData = await cacheService.get(
+        `user_projects:${user.id}`,
+        async () => {
+          console.log('🔄 Loading projects from database with optimization...');
+          
+          // Try the optimized database function first
+          const { data, error } = await supabase.rpc('get_user_projects_with_stats', { 
+            p_user_id: user.id 
+          });
+
+          if (error) {
+            console.log('Optimized query failed, falling back to regular query:', error);
+            // Fallback to regular ProjectService
+            return await ProjectService.getProjects(user.id);
+          }
+
+          console.log('✅ Optimized projects loaded:', data?.length || 0);
+          return data ? (data as Project[]) : [];
+        },
+        { 
+          forceRefresh,
+          ttl: 5 * 60 * 1000 // 5 minutes cache
+        }
+      );
+
+      setProjects(projectsData || []);
+      
+      // Log cache performance
+      const stats = cacheService.getStats();
+      console.log('📊 Cache Performance:', {
+        hitRate: `${stats.hitRate.toFixed(1)}%`,
+        totalOperations: stats.hits + stats.misses
+      });
+      
     } catch (error) {
       console.error('Error loading projects:', error);
       Alert.alert('Error', 'Failed to load projects');
+      // Fallback to mock data
+      setProjects(ProjectService.getMockProjects());
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
-  // Refresh projects
+  // 🚀 OPTIMIZED: Refresh with cache invalidation
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadProjects();
+    await loadProjects(true); // Force refresh bypasses cache
     setRefreshing(false);
   }, [loadProjects]);
 
@@ -51,8 +102,16 @@ const ProjectPage = () => {
 
   useFocusEffect(
     useCallback(() => {
-      loadProjects();
-    }, [loadProjects])
+      // Simple refresh on focus for now
+      const shouldRefresh = async () => {
+        if (!user?.id) return;
+        
+        console.log('🔄 Refreshing projects on focus...');
+        loadProjects();
+      };
+      
+      shouldRefresh();
+    }, [loadProjects, user?.id])
   );
 
   // Filter projects based on selected categories
@@ -70,7 +129,7 @@ const ProjectPage = () => {
     navigation.navigate("projectdetails", { projectId: project.id });
   };
 
-  // Handle project edit
+  // 🚀 OPTIMIZED: Handle project edit with smart cache invalidation
   const handleProjectEdit = async (project: Project, field: string, value: any) => {
     try {
       let updatedProject: Partial<Project>;
@@ -89,8 +148,16 @@ const ProjectPage = () => {
 
       const result = await ProjectService.updateProject(project.id, updatedProject);
       if (result) {
-        // Update local state
+        // Update local state immediately
         setProjects(prev => prev.map(p => p.id === project.id ? { ...p, ...updatedProject } : p));
+        
+        // 🚀 Smart cache invalidation - invalidate related caches
+        if (user?.id) {
+          await cacheService.invalidate(`user_projects:${user.id}`);
+          await cacheService.invalidate(`project_details:${project.id}`);
+          await cacheService.invalidate(`dashboard_stats:${user.id}`);
+          console.log('🗑️ Cache invalidated after project update');
+        }
       } else {
         Alert.alert('Error', 'Failed to update project');
       }
@@ -100,7 +167,7 @@ const ProjectPage = () => {
     }
   };
 
-  // Handle project delete
+  // 🚀 OPTIMIZED: Handle project delete with cache invalidation
   const handleProjectDelete = async (projectId: string) => {
     Alert.alert(
       'Delete Project',
@@ -114,7 +181,16 @@ const ProjectPage = () => {
             try {
               const success = await ProjectService.deleteProject(projectId);
               if (success) {
+                // Update local state immediately
                 setProjects(prev => prev.filter(p => p.id !== projectId));
+                
+                // 🚀 Smart cache invalidation
+                if (user?.id) {
+                  await cacheService.invalidate(`user_projects:${user.id}`);
+                  await cacheService.invalidate(`project_details:${projectId}`);
+                  await cacheService.invalidate(`dashboard_stats:${user.id}`);
+                  console.log('🗑️ Cache invalidated after project deletion');
+                }
               } else {
                 Alert.alert('Error', 'Failed to delete project');
               }
@@ -181,7 +257,7 @@ const ProjectPage = () => {
           <Text style={[styles.headerTitle, {
             color: dark ? COLORS.white : COLORS.greyscale900
           }]}>
-            My Projects ({projects.length})
+            My Projects ({projects.length}) {user?.id ? '⚡' : '🔄'}
           </Text>
         </View>
         <View style={styles.viewContainer}>

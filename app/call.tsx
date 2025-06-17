@@ -1,10 +1,11 @@
+import UserAvatar from '@/components/UserAvatar';
 import { NavigationProp } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from 'expo-router';
 import React, { useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS, SIZES, icons, images } from '../constants';
+import { COLORS, SIZES, icons } from '../constants';
 import { useTheme } from '../theme/ThemeProvider';
 
 // Inbox call screen
@@ -29,9 +30,8 @@ const Call = () => {
                     />
                 </TouchableOpacity>
                 <View style={styles.userInfo}>
-                    <Image
-                        source={images.user1}
-                        resizeMode='contain'
+                    <UserAvatar
+                        size={200}
                         style={styles.userImg}
                     />
                     <View style={styles.view}>

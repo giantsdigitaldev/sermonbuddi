@@ -615,7 +615,7 @@ Title:`;
   }
 
   /**
-   * Get all chat sessions for the current user
+   * Get all chat sessions for the current user - OPTIMIZED
    */
   static async getChatSessions(): Promise<ChatSession[]> {
     try {
@@ -625,53 +625,27 @@ Title:`;
         throw new Error('User not authenticated');
       }
 
-      const { data, error } = await supabase
-        .from('chat_conversations')
-        .select(`
-          id,
-          user_id,
-          project_id,
-          title,
-          metadata,
-          created_at,
-          updated_at
-        `)
-        .eq('user_id', user.id)
-        .order('updated_at', { ascending: false });
+      // Use the optimized function that includes message counts
+      const { data, error } = await supabase.rpc('get_user_conversations_with_counts', { 
+        p_user_id: user.id 
+      });
 
       if (error) {
         throw new Error(`Failed to fetch chat sessions: ${error.message}`);
       }
 
-      // Transform data and add message counts
-      const sessions: ChatSession[] = await Promise.all(
-        (data || []).map(async (conversation) => {
-          // Get message count and last message
-          const { data: messageData } = await supabase
-            .from('chat_messages')
-            .select('created_at')
-            .eq('conversation_id', conversation.id)
-            .order('created_at', { ascending: false })
-            .limit(1);
-
-          const messageCount = await supabase
-            .from('chat_messages')
-            .select('id', { count: 'exact' })
-            .eq('conversation_id', conversation.id);
-
-          return {
-            id: conversation.id,
-            user_id: conversation.user_id,
-            project_id: conversation.project_id,
-            title: conversation.title,
-            preview: conversation.metadata?.preview || 'No messages yet',
-            message_count: messageCount.count || 0,
-            last_message_at: messageData?.[0]?.created_at || conversation.created_at,
-            created_at: conversation.created_at,
-            updated_at: conversation.updated_at
-          };
-        })
-      );
+      // Transform to ChatSession format
+      const sessions: ChatSession[] = (data || []).map((conversation: any) => ({
+        id: conversation.id,
+        user_id: user.id,
+        project_id: conversation.project_id,
+        title: conversation.title || 'Untitled Conversation',
+        preview: 'Recent conversation', // Could be enhanced with actual preview
+        message_count: Number(conversation.message_count) || 0,
+        last_message_at: conversation.last_message_at || conversation.created_at,
+        created_at: conversation.created_at,
+        updated_at: conversation.updated_at
+      }));
 
       return sessions;
     } catch (error: any) {

@@ -2,7 +2,9 @@ import Button from '@/components/Button';
 import CommentCard from '@/components/CommentCard';
 import SubHeaderItem from '@/components/SubHeaderItem';
 import TaskCard from '@/components/TaskCard';
+import UserAvatar from '@/components/UserAvatar';
 import { COLORS, icons, images, SIZES } from '@/constants';
+import { useAuth } from '@/contexts/AuthContext';
 import { projectComments, subTasks } from '@/data';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Project, ProjectService, Task } from '@/utils/projectService';
@@ -11,7 +13,7 @@ import { NavigationProp } from '@react-navigation/native';
 import { useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Image, ImageSourcePropType, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Calendar } from "react-native-calendars";
 import RBSheet from "react-native-raw-bottom-sheet";
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -26,6 +28,7 @@ const ProjectDetailsBoardDetails = () => {
     const projectId = params.projectId as string;
     const taskId = params.taskId as string;
     const participants = [images.user2, images.user3, images.user4, images.user5, images.user6, images.user1, images.user7];
+    const { user } = useAuth();
     const [comment, setComment] = useState("");
     const [selectedStatus, setSelectedStatus] = useState<string>("To-Do");
     const refStatusRBSheet = useRef<any>(null);
@@ -37,6 +40,7 @@ const ProjectDetailsBoardDetails = () => {
     const [loading, setLoading] = useState(true);
     const [editingField, setEditingField] = useState<string | null>(null);
     const [editValue, setEditValue] = useState('');
+    const [completedTasks, setCompletedTasks] = useState<{ [key: string]: boolean }>({});
 
     const handleSend = () => {
         if (comment.trim().length > 0) {
@@ -44,7 +48,6 @@ const ProjectDetailsBoardDetails = () => {
             setComment("");
         }
     };
-    const [completedTasks, setCompletedTasks] = useState<{ [key: string]: boolean }>({});
 
     const handleToggle = (id: string, completed: boolean) => {
         setCompletedTasks((prev) => ({ ...prev, [id]: completed }));
@@ -265,9 +268,21 @@ const ProjectDetailsBoardDetails = () => {
 
                                 {/* Participants Avatars */}
                                 <View style={styles.avatars}>
-                                    {members.slice(0, 3).map((member, index) => (
-                                        <Image key={index} source={typeof member === 'string' ? { uri: member } : member as ImageSourcePropType} style={[styles.avatar, { left: index * -14 }]} />
-                                    ))}
+                                    <FlatList
+                                        data={participants}
+                                        keyExtractor={(item, index) => index.toString()}
+                                        horizontal
+                                        renderItem={({ item: member, index }: { item: any; index: number }) => (
+                                            <Image
+                                                key={index}
+                                                source={member}
+                                                resizeMode='contain'
+                                                style={[styles.participantAvatar, {
+                                                    marginLeft: index > 0 ? -10 : 0
+                                                }]}
+                                            />
+                                        )}
+                                    />
                                     {members.length > 3 && (
                                         <View style={styles.moreMembers}>
                                             <Text style={styles.moreText}>+{members.length - 3}</Text>
@@ -293,14 +308,13 @@ const ProjectDetailsBoardDetails = () => {
                                         color: dark ? "#EEEEEE" : COLORS.grayscale700
                                     }]}>Leader</Text>
                                 </View>
-                                <Image
-                                    source={images.user2}
-                                    resizeMode='contain'
+                                <UserAvatar
+                                    size={32}
                                     style={styles.leaderAvatar}
                                 />
                                 <Text style={[styles.leaderName, {
                                     color: dark ? COLORS.white : COLORS.greyscale900,
-                                }]}>Daniel Austin (you)</Text>
+                                }]}>{user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'You'}</Text>
                             </View>
                             <View style={styles.sectionContainer}>
                                 <View style={styles.sectionLeftContainer}>
@@ -466,8 +480,8 @@ const ProjectDetailsBoardDetails = () => {
             <View style={[styles.inputContainer, {
                 backgroundColor: dark ? COLORS.dark2 : "#f8f8f8",
             }]}>
-                <Image
-                    source={images.user1}
+                <UserAvatar
+                    size={32}
                     style={styles.profileImage}
                 />
                 <TextInput
@@ -997,6 +1011,12 @@ const styles = StyleSheet.create({
          color: COLORS.white,
          fontSize: 12,
          fontFamily: 'bold',
+     },
+     participantAvatar: {
+         width: 30,
+         height: 30,
+         borderRadius: 15,
+         marginLeft: 0,
      },
  });
 

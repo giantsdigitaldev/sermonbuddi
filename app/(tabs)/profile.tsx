@@ -1,9 +1,11 @@
 import Button from '@/components/Button';
+import OptimizedUserAvatar from '@/components/OptimizedUserAvatar';
 import SettingsItem from '@/components/SettingsItem';
 import { COLORS, icons, images, SIZES } from '@/constants';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/theme/ThemeProvider';
-import { launchImagePicker } from '@/utils/ImagePickerHelper';
+import { cacheService } from '@/utils/cacheService';
+import { ProfileService } from '@/utils/profileService';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from 'expo-router';
 import React, { useRef, useState } from 'react';
@@ -55,17 +57,29 @@ const Profile = () => {
    * Render User Profile
    */
   const renderProfile = () => {
-    const [image, setImage] = useState(images.user1)
-
     const pickImage = async () => {
       try {
-        const tempUri = await launchImagePicker()
+        if (!user) {
+          Alert.alert('Error', 'No user session found');
+          return;
+        }
 
-        if (!tempUri) return
-
-        // Set the image
-        setImage({ uri: tempUri })
-      } catch (error) { }
+        // Use ProfileService's image picker for web compatibility
+        const result = await ProfileService.pickAndUploadProfileImage(user.id);
+        
+        if (result.success && result.url) {
+          Alert.alert('Success', 'Profile image updated successfully!');
+          // 🚀 OPTIMIZED: Invalidate the avatar cache to show the new image instantly
+          await cacheService.invalidate(`user_avatar:${user.id}`);
+          console.log('🗑️ Avatar cache invalidated after upload');
+        } else if (result.error && !result.error.includes('cancelled')) {
+          console.error('Image upload failed:', result.error);
+          Alert.alert('Upload Failed', result.error);
+        }
+      } catch (error: any) { 
+        console.error('Error picking/uploading image:', error);
+        Alert.alert('Error', 'Failed to pick or upload image');
+      }
     };
 
     // Use real user data from Supabase
@@ -75,10 +89,11 @@ const Profile = () => {
     return (
       <View style={styles.profileContainer}>
         <View>
-          <Image
-            source={image}
-            resizeMode='cover'
+          <OptimizedUserAvatar
+            size={120}
             style={styles.avatar}
+            showLoading={true}
+            showCacheIndicator={true}
           />
           <TouchableOpacity
             onPress={pickImage}

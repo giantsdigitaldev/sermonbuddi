@@ -10,13 +10,15 @@ import Button from '../components/Button';
 import DatePickerModal from '../components/DatePickerModal';
 import Header from '../components/Header';
 import Input from '../components/Input';
-import { COLORS, FONTS, icons, images, SIZES } from '../constants';
+import OptimizedUserAvatar from '../components/OptimizedUserAvatar';
+import { COLORS, FONTS, icons, SIZES } from '../constants';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../theme/ThemeProvider';
 import { validateInput } from '../utils/actions/formActions';
+import { cacheService } from '../utils/cacheService';
 import { ProfileService } from '../utils/profileService';
 import { reducer } from '../utils/reducers/formReducers';
-import { StorageTest } from '../utils/storageTest';
+import { SetupTester } from '../utils/testSetup';
 
 interface CountryItem {
     flag: string;
@@ -70,8 +72,16 @@ const initialState = {
 
 // Edit Profile Screen
 const EditProfile = () => {
+    const { colors, dark } = useTheme();
     const navigation = useNavigation<NavigationProp<any>>();
     const { user } = useAuth();
+    // Avatar cache invalidation helper
+    const invalidateAvatarCache = async () => {
+        if (user?.id) {
+            await cacheService.invalidate(`user_avatar:${user.id}`);
+            console.log('🗑️ Avatar cache invalidated');
+        }
+    };
     const [image, setImage] = useState<any>(null);
     const [error, setError] = useState();
     const [formState, dispatchFormState] = useReducer(reducer, initialState);
@@ -82,7 +92,6 @@ const EditProfile = () => {
     const [selectedGender, setSelectedGender] = useState('');
     const [loading, setLoading] = useState(false);
     const [profileData, setProfileData] = useState<any>(null);
-    const { dark } = useTheme();
 
     const genderOptions = [
         { label: 'Male', value: 'male' },
@@ -127,66 +136,124 @@ const EditProfile = () => {
             if (!user) return;
             
             try {
-                // Test storage access on component load
-                const storageTest = await StorageTest.testStorageAccess();
-                if (!storageTest.success) {
-                    console.warn('Storage access issue:', storageTest.error);
-                    // Don't block the UI, just log the warning
-                }
+                console.log('Loading profile for user:', user.id);
+                console.log('User data:', user);
                 
-                const response = await ProfileService.getProfile();
-                if (response.success && response.data) {
-                    const profile = response.data;
-                    setProfileData(profile);
+                // Always initialize email field first
+                dispatchFormState({
+                    inputId: 'email',
+                    validationResult: true,
+                    inputValue: user.email || '',
+                });
+                
+                // Get profile from database
+                const profile = await ProfileService.getProfile(user.id);
+                console.log('Profile response:', profile);
+                
+                if (profile.success && profile.data) {
+                    setProfileData(profile.data);
                     
-                    // Update form state with existing data from profile
+                    // Set form values from database
+                    if (profile.data.full_name) {
+                        dispatchFormState({
+                            inputId: 'fullName',
+                            validationResult: true,
+                            inputValue: profile.data.full_name,
+                        });
+                    } else if (user.user_metadata?.full_name) {
+                        // Fallback to user metadata
+                        dispatchFormState({
+                            inputId: 'fullName',
+                            validationResult: true,
+                            inputValue: user.user_metadata.full_name,
+                        });
+                    }
+                    
+                    if (profile.data.username) {
+                        dispatchFormState({
+                            inputId: 'nickname',
+                            validationResult: true,
+                            inputValue: profile.data.username,
+                        });
+                    } else if (user.email) {
+                        // Fallback to email username
+                        dispatchFormState({
+                            inputId: 'nickname',
+                            validationResult: true,
+                            inputValue: user.email.split('@')[0],
+                        });
+                    }
+                    
+                    // Set image from profile
+                    if (profile.data.avatar_url) {
+                        console.log('Setting image from profile:', profile.data.avatar_url);
+                        setImage({ uri: profile.data.avatar_url });
+                    }
+                    
+                } else {
+                    // Handle profile loading error - still initialize with user data
+                    console.log('Profile load failed:', profile.error);
+                    if (profile.error?.includes('permission denied') || profile.error?.includes('access denied')) {
+                        Alert.alert(
+                            'Database Setup Required',
+                            'The database needs to be configured properly. Please run the setup script or contact support.\n\nYou can still edit your profile - it will create a new profile entry when saved.',
+                            [{ text: 'OK' }]
+                        );
+                    }
+                    
+                    // Pre-fill form with user data even if profile loading failed
                     dispatchFormState({
                         inputId: 'fullName',
                         validationResult: true,
-                        inputValue: profile.full_name || user.user_metadata?.full_name || '',
-                    });
-                    
-                    dispatchFormState({
-                        inputId: 'email',
-                        validationResult: true,
-                        inputValue: user.email || '',
+                        inputValue: user.user_metadata?.full_name || '',
                     });
                     
                     dispatchFormState({
                         inputId: 'nickname',
                         validationResult: true,
-                        inputValue: profile.username || '',
+                        inputValue: user.email?.split('@')[0] || '',
                     });
-                    
-                    // Load extended fields from user metadata
-                    dispatchFormState({
-                        inputId: 'occupation',
-                        validationResult: true,
-                        inputValue: user.user_metadata?.occupation || '',
-                    });
-                    
-                    if (profile.avatar_url) {
-                        setImage({ uri: profile.avatar_url });
-                    }
-                    
-                    if (user.user_metadata?.gender) {
-                        setSelectedGender(user.user_metadata.gender);
-                    }
-                    
-                    if (user.user_metadata?.date_of_birth) {
-                        setStartedDate(user.user_metadata.date_of_birth);
-                    }
-                    
-                    if (user.user_metadata?.phone_number) {
-                        dispatchFormState({
-                            inputId: 'phoneNumber',
-                            validationResult: true,
-                            inputValue: user.user_metadata.phone_number,
-                        });
-                    }
                 }
+                
+                // Load extended fields from user metadata (always available)
+                dispatchFormState({
+                    inputId: 'occupation',
+                    validationResult: true,
+                    inputValue: user.user_metadata?.occupation || '',
+                });
+                
+                if (user.user_metadata?.gender) {
+                    setSelectedGender(user.user_metadata.gender);
+                }
+                
+                if (user.user_metadata?.date_of_birth) {
+                    setStartedDate(user.user_metadata.date_of_birth);
+                }
+                
+                if (user.user_metadata?.phone_number) {
+                    dispatchFormState({
+                        inputId: 'phoneNumber',
+                        validationResult: true,
+                        inputValue: user.user_metadata.phone_number,
+                    });
+                }
+                
             } catch (error) {
                 console.error('Error loading profile:', error);
+                Alert.alert('Error', 'Failed to load profile data. You can still edit and save your profile.');
+                
+                // Still initialize basic fields on error
+                dispatchFormState({
+                    inputId: 'fullName',
+                    validationResult: true,
+                    inputValue: user.user_metadata?.full_name || '',
+                });
+                
+                dispatchFormState({
+                    inputId: 'nickname',
+                    validationResult: true,
+                    inputValue: user.email?.split('@')[0] || '',
+                });
             }
         };
 
@@ -208,13 +275,44 @@ const EditProfile = () => {
                 return;
             }
 
+            console.log('Starting image picker...');
+            
             // Use ProfileService's image picker for web compatibility
             const result = await ProfileService.pickAndUploadProfileImage(user.id);
             
+            console.log('Image upload result:', result);
+            
             if (result.success && result.url) {
-                // Set the uploaded image URL
+                // Set the uploaded image URL immediately
                 setImage({ uri: result.url });
-                Alert.alert('Success', 'Image uploaded successfully!');
+                
+                // Also update the profile in the database immediately with the new avatar
+                try {
+                    const currentProfileData = {
+                        full_name: formState.inputValues.fullName?.trim() || profileData?.full_name,
+                        username: formState.inputValues.nickname?.trim() || profileData?.username,
+                        avatar_url: result.url, // Use the new uploaded image URL
+                    };
+                    
+                    console.log('Updating profile with new avatar:', currentProfileData);
+                    
+                    const updateResponse = await ProfileService.updateProfile(currentProfileData);
+                    
+                    if (updateResponse.success) {
+                        console.log('Profile updated with new avatar successfully');
+                        setProfileData(updateResponse.data);
+                        // Invalidate avatar cache
+                        await invalidateAvatarCache();
+                        Alert.alert('Success', 'Profile image updated successfully!');
+                    } else {
+                        console.warn('Failed to update profile with new avatar:', updateResponse.error);
+                        Alert.alert('Warning', 'Image uploaded but failed to save to profile. Please click Update Profile to save changes.');
+                    }
+                } catch (profileUpdateError) {
+                    console.error('Error updating profile with new avatar:', profileUpdateError);
+                    Alert.alert('Warning', 'Image uploaded but failed to save to profile. Please click Update Profile to save changes.');
+                }
+                
             } else if (result.error && !result.error.includes('cancelled')) {
                 console.error('Image upload failed:', result.error);
                 Alert.alert('Upload Failed', result.error);
@@ -233,12 +331,14 @@ const EditProfile = () => {
 
         setLoading(true);
         try {
-            // Validate profile data - only store basic fields in database
+            console.log('Updating profile with image:', image);
+            
+            // Prepare profile data - only store basic fields in database
             const updateData = {
                 full_name: formState.inputValues.fullName.trim(),
                 username: formState.inputValues.nickname.trim(),
                 website: '', // Can be added later if needed
-                avatar_url: image?.uri || profileData?.avatar_url, // Include current image URL
+                avatar_url: image?.uri, // Use the current image URI
                 // Extended fields will be stored in user metadata
                 phone_number: selectedArea ? 
                     `${selectedArea.callingCode}${formState.inputValues.phoneNumber}` : 
@@ -247,6 +347,8 @@ const EditProfile = () => {
                 gender: selectedGender,
                 date_of_birth: startedDate,
             };
+
+            console.log('Update data being sent:', updateData);
 
             // Validate the data
             const validation = ProfileService.validateProfileData(updateData);
@@ -257,12 +359,17 @@ const EditProfile = () => {
             }
 
             // Update profile using ProfileService
-            const response = await ProfileService.updateProfile(
-                updateData,
-                undefined // Don't pass imageUri since image is already uploaded
-            );
+            const response = await ProfileService.updateProfile(updateData);
+            
+            console.log('Profile update response:', response);
             
             if (response.success) {
+                // Update the profile data state
+                setProfileData(response.data);
+                
+                // Invalidate avatar cache after successful profile update
+                await invalidateAvatarCache();
+                
                 Alert.alert(
                     'Success', 
                     'Profile updated successfully!', 
@@ -277,6 +384,29 @@ const EditProfile = () => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const testSetup = async () => {
+        if (!user) return;
+        
+        console.log('Testing setup...');
+        const results = await SetupTester.runFullTest(user.id);
+        console.log('Setup test results:', results);
+        
+        let message = 'Setup Test Results:\n\n';
+        message += `Database: ${results.database.success ? '✅ Connected' : '❌ ' + results.database.error}\n`;
+        message += `Storage: ${results.storage.success ? '✅ Connected' : '❌ ' + results.storage.error}\n`;
+        if (results.storage.buckets) {
+            message += `Available buckets: ${results.storage.buckets.join(', ')}\n`;
+        }
+        if (results.profile) {
+            message += `Profile: ${results.profile.success ? '✅ Accessible' : '❌ ' + results.profile.error}\n`;
+            if (results.profile.profile) {
+                message += `Profile data: ${JSON.stringify(results.profile.profile, null, 2)}\n`;
+            }
+        }
+        
+        Alert.alert('Setup Test Results', message);
     };
 
     // Render countries codes modal
@@ -348,10 +478,20 @@ const EditProfile = () => {
                 <ScrollView showsVerticalScrollIndicator={false}>
                     <View style={{ alignItems: "center", marginVertical: 12 }}>
                         <View style={styles.avatarContainer}>
-                            <Image
-                                source={image === null ? images.user1 : image}
-                                resizeMode="cover"
-                                style={styles.avatar} />
+                            {image ? (
+                                <Image
+                                    source={image}
+                                    resizeMode="cover"
+                                    style={styles.avatar}
+                                />
+                            ) : (
+                                <OptimizedUserAvatar
+                                    size={130}
+                                    style={styles.avatar}
+                                    showLoading={true}
+                                    showCacheIndicator={false}
+                                />
+                            )}
                             <TouchableOpacity
                                 onPress={pickImage}
                                 style={styles.pickImage}>
@@ -496,6 +636,17 @@ const EditProfile = () => {
                     style={styles.continueButton}
                     onPress={handleUpdateProfile}
                     disabled={loading}
+                />
+                
+                {/* Temporary test button for debugging */}
+                <Button
+                    title="Test Setup"
+                    style={{
+                        marginTop: 12,
+                        marginBottom: 12,
+                        backgroundColor: COLORS.gray,
+                    }}
+                    onPress={testSetup}
                 />
             </View>
         </SafeAreaView>

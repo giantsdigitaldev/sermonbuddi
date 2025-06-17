@@ -1,20 +1,22 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image, FlatList, ImageSourcePropType } from 'react-native';
-import React from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useTheme } from '@/theme/ThemeProvider';
-import { useNavigation } from 'expo-router';
-import { NavigationProp } from '@react-navigation/native';
+import UserAvatar from '@/components/UserAvatar';
 import { COLORS, icons, images } from '@/constants';
+import { useTheme } from '@/theme/ThemeProvider';
 import { Ionicons } from '@expo/vector-icons';
+import { NavigationProp } from '@react-navigation/native';
+import { useNavigation } from 'expo-router';
+import React from 'react';
+import { FlatList, Image, ImageSourcePropType, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface TeamMember {
     id: string;
     name: string;
-    avatar: string;
+    avatar?: string;
+    isCurrentUser?: boolean;
 }
 
 const teamMembers: TeamMember[] = [
-    { id: "1", name: "You", avatar: images.user1 },
+    { id: "1", name: "You", isCurrentUser: true },
     { id: "2", name: "Jenny", avatar: images.user2 },
     { id: "3", name: "Esther", avatar: images.user3 },
     { id: "4", name: "Wade", avatar: images.user4 },
@@ -78,7 +80,14 @@ const InboxTeamVoiceCall = () => {
                         <View style={[styles.memberContainer, {
                             backgroundColor: dark ? COLORS.dark2 : "#f5f5f5",
                         }]}>
-                            <Image source={item.avatar as ImageSourcePropType} style={styles.avatar} />
+                            {item.isCurrentUser ? (
+                                <UserAvatar
+                                    size={70}
+                                    style={styles.avatar}
+                                />
+                            ) : (
+                                <Image source={item.avatar as ImageSourcePropType} style={styles.avatar} />
+                            )}
                             <Text style={[styles.name, {
                                 color: dark ? COLORS.white : COLORS.greyscale900,
                             }]}>{item.name}</Text>

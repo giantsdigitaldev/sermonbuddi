@@ -1,10 +1,11 @@
+import UserAvatar from '@/components/UserAvatar';
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { NavigationProp, useNavigation } from '@react-navigation/native';
 import React, { useState } from 'react';
 import { Image, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Bubble, GiftedChat } from 'react-native-gifted-chat';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS, icons, images } from '../constants';
+import { COLORS, icons } from '../constants';
 import { useTheme } from '../theme/ThemeProvider';
 
 // Chat screen
@@ -54,13 +55,9 @@ const Chat = () => {
                         flexDirection: 'row',
                         justifyContent: 'flex-start',
                     }}>
-                    <Image
-                        source={images.user1}
-                        resizeMode='contain'
+                    <UserAvatar
+                        size={40}
                         style={{
-                            width: 40,
-                            height: 40,
-                            borderRadius: 20,
                             marginLeft: 8,
                         }}
                     />

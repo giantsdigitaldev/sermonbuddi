@@ -396,23 +396,17 @@ export class ProjectService {
     return [];
   }
 
-  // Get all projects for a user
-  static async getProjects(): Promise<Project[]> {
-    // Always return mock data for now since database permissions aren't set up
-    return this.getMockProjects();
-
-    // Commented out database logic until permissions are fixed
-    /*
-    const dbAvailable = await this.checkDatabaseAvailability();
-    if (!dbAvailable) {
+  // Get all projects for a user with optimized performance
+  static async getProjects(userId?: string): Promise<Project[]> {
+    if (!userId) {
       return this.getMockProjects();
     }
 
     try {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .order('updated_at', { ascending: false });
+      // Use the optimized function with stats
+      const { data, error } = await supabase.rpc('get_user_projects_with_stats', { 
+        p_user_id: userId 
+      });
 
       if (error) {
         console.log('Database error, returning mock data:', error);
@@ -424,7 +418,6 @@ export class ProjectService {
       console.log('Database error, returning mock data:', error);
       return this.getMockProjects();
     }
-    */
   }
 
   // Get a specific project by ID
@@ -807,5 +800,70 @@ export class ProjectService {
       return [];
     }
     */
+  }
+
+  // Update a task
+  static async updateTask(taskId: string, updates: Partial<Task>): Promise<Task | null> {
+    try {
+      const isAvailable = await this.checkDatabaseAvailability();
+      
+      if (!isAvailable) {
+        console.log('Database not available, returning mock task update');
+        // Return a mock updated task
+        const mockTasks = this.getMockTasks('mock-project-1');
+        const task = mockTasks.find(t => t.id === taskId);
+        if (task) {
+          return { ...task, ...updates, updated_at: new Date().toISOString() };
+        }
+        return null;
+      }
+
+      const { data, error } = await supabase
+        .from('tasks')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', taskId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error updating task:', error);
+        return null;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Task update error:', error);
+      return null;
+    }
+  }
+
+  // Delete a task
+  static async deleteTask(taskId: string): Promise<boolean> {
+    try {
+      const isAvailable = await this.checkDatabaseAvailability();
+      
+      if (!isAvailable) {
+        console.log('Database not available, returning mock task deletion');
+        return true; // Mock successful deletion
+      }
+
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', taskId);
+
+      if (error) {
+        console.error('Error deleting task:', error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Task deletion error:', error);
+      return false;
+    }
   }
 } 

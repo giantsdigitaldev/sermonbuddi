@@ -1,10 +1,12 @@
+import OptimizedUserAvatar from '@/components/OptimizedUserAvatar';
 import ProjectCard from '@/components/ProjectCard';
 import SubHeaderItem from '@/components/SubHeaderItem';
 import TaskCard from '@/components/TaskCard';
-import { COLORS, icons, images, SIZES } from '@/constants';
+import { COLORS, icons, SIZES } from '@/constants';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTabBar } from '@/contexts/TabBarContext';
 import { recentprojects, todayTasks } from '@/data';
+import { useRoutePredictiveCache } from '@/hooks/usePredictiveCache';
 import { useTheme } from '@/theme/ThemeProvider';
 import { NavigationProp, useNavigation } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
@@ -16,6 +18,9 @@ const HomeScreen = () => {
   const navigation = useNavigation<NavigationProp<any>>();
   const { user } = useAuth();
   const { handleScroll } = useTabBar();
+
+  // 🚀 PREDICTIVE CACHE: Track home page behavior
+  useRoutePredictiveCache('home');
 
   // Get user display name and greeting
   const getUserDisplayName = () => {
@@ -39,10 +44,11 @@ const HomeScreen = () => {
     return (
       <View style={styles.headerContainer}>
         <View style={styles.viewLeft}>
-          <Image
-            source={images.user1}
-            resizeMode="contain"
+          <OptimizedUserAvatar
+            size={48}
             style={styles.userIcon}
+            showLoading={true}
+            showCacheIndicator={true}
           />
           <View style={styles.viewNameContainer}>
             <Text style={styles.greeeting}>{getGreeting()}</Text>

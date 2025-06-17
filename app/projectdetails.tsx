@@ -408,7 +408,7 @@ const ProjectDetails = () => {
           <Image source={project.metadata?.logo ? { uri: project.metadata.logo } : images.logo5} style={styles.logo} />
         </View>
         <View style={styles.membersContainer}>
-          {members.slice(0, 3).map((member, index) => (
+          {members.slice(0, 3).map((member: any, index: number) => (
             <Image
               key={index}
               source={typeof member === 'string' ? { uri: member } : member as ImageSourcePropType}
@@ -420,6 +420,12 @@ const ProjectDetails = () => {
               <Text style={styles.moreText}>+{members.length - 3}</Text>
             </View>
           )}
+          <TouchableOpacity
+            onPress={() => navigation.navigate('projectdetailsteammenber', { projectId: project.id })}
+            style={styles.teamManageButton}
+          >
+            <Ionicons name="people" size={16} color={COLORS.white} />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -503,6 +509,13 @@ const ProjectDetails = () => {
         onPress={() => navigation.navigate("addnewtaskform", { projectId: project.id })}
         style={styles.addIconContainer}>
         <Ionicons name="add" size={24} color="#FFF" />
+      </TouchableOpacity>
+      
+      {/* Add Team Member Button */}
+      <TouchableOpacity
+        onPress={() => navigation.navigate("projectdetailsaddteammenber", { projectId: project.id })}
+        style={styles.addTeamIconContainer}>
+        <Ionicons name="person-add" size={20} color="#FFF" />
       </TouchableOpacity>
     </View>
   )
@@ -774,6 +787,31 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: 14,
     fontFamily: 'semiBold',
+  },
+  teamManageButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 10,
+  },
+  addTeamIconContainer: {
+    height: 48,
+    width: 48,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "absolute",
+    bottom: 90,
+    right: 16,
+    backgroundColor: COLORS.success,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
 });
 

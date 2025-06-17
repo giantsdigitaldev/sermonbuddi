@@ -1,21 +1,22 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image, ImageSourcePropType, FlatList } from 'react-native';
-import React, { useCallback, useReducer, useRef, useState } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS, icons, images, SIZES } from '@/constants';
-import { useTheme } from '@/theme/ThemeProvider';
-import { useNavigation } from 'expo-router';
-import { NavigationProp } from '@react-navigation/native';
 import Button from '@/components/Button';
+import Input from '@/components/Input';
 import SubHeaderItem from '@/components/SubHeaderItem';
 import TaskCard from '@/components/TaskCard';
+import UserAvatar from '@/components/UserAvatar';
+import { COLORS, icons, images, SIZES } from '@/constants';
 import { subTasks } from '@/data';
-import { ScrollView } from 'react-native-virtualized-view';
-import { Ionicons } from '@expo/vector-icons';
-import RBSheet from "react-native-raw-bottom-sheet";
-import { Calendar } from "react-native-calendars";
-import Input from '@/components/Input';
-import { reducer } from '@/utils/reducers/formReducers';
+import { useTheme } from '@/theme/ThemeProvider';
 import { validateInput } from '@/utils/actions/formActions';
+import { reducer } from '@/utils/reducers/formReducers';
+import { Ionicons } from '@expo/vector-icons';
+import { NavigationProp } from '@react-navigation/native';
+import { useNavigation } from 'expo-router';
+import React, { useCallback, useReducer, useRef, useState } from 'react';
+import { FlatList, Image, ImageSourcePropType, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Calendar } from "react-native-calendars";
+import RBSheet from "react-native-raw-bottom-sheet";
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ScrollView } from 'react-native-virtualized-view';
 
 const statuses = ["To-Do", "In-Progress", "Revision", "Completed"];
 
@@ -174,9 +175,8 @@ const NewProjectBoardTaskDetails = () => {
                                         color: dark ? "#EEEEEE" : COLORS.grayscale700
                                     }]}>Leader</Text>
                                 </View>
-                                <Image
-                                    source={images.user2}
-                                    resizeMode='contain'
+                                <UserAvatar
+                                    size={32}
                                     style={styles.leaderAvatar}
                                 />
                                 <Text style={[styles.leaderName, {

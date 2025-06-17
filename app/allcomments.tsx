@@ -1,13 +1,14 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image, FlatList, TextInput } from 'react-native';
-import React, { useState } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useTheme } from '@/theme/ThemeProvider';
-import { COLORS, icons, images } from '@/constants';
-import { useNavigation } from 'expo-router';
-import { NavigationProp } from '@react-navigation/native';
-import { projectComments } from '@/data';
 import CommentCard from '@/components/CommentCard';
+import UserAvatar from '@/components/UserAvatar';
+import { COLORS, icons } from '@/constants';
+import { projectComments } from '@/data';
+import { useTheme } from '@/theme/ThemeProvider';
 import { Ionicons } from '@expo/vector-icons';
+import { NavigationProp } from '@react-navigation/native';
+import { useNavigation } from 'expo-router';
+import React, { useState } from 'react';
+import { FlatList, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const AllComments = () => {
     const { colors, dark } = useTheme();
@@ -76,8 +77,8 @@ const AllComments = () => {
             <View style={[styles.inputContainer, {
                 backgroundColor: dark ? COLORS.dark2 : "#f8f8f8",
             }]}>
-                <Image
-                    source={images.user1}
+                <UserAvatar
+                    size={40}
                     style={styles.profileImage}
                 />
                 <TextInput

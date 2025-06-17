@@ -199,6 +199,12 @@ export default function DemoScreen() {
             style={styles.arrowBackIcon}
           />
         </TouchableOpacity>
+        <TouchableOpacity 
+          onPress={() => navigation.navigate('ui-library' as never)}
+          style={styles.uiLibraryButton}
+        >
+          <Text style={styles.uiLibraryText}>UI Library</Text>
+        </TouchableOpacity>
         <View style={styles.rightContainer}>
           <TouchableOpacity>
             <Image
@@ -507,5 +513,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 5,
+  },
+  uiLibraryButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginRight: 8,
+  },
+  uiLibraryText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontFamily: 'semiBold',
   },
 }); 
