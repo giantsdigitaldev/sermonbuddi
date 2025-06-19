@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { COLORS, SIZES } from '@/constants';
-import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeProvider';
+import { Ionicons } from '@expo/vector-icons';
+import React, { useState } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 type Task = {
   id: string;
@@ -29,6 +29,13 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, isCompleted = false, onToggle
   return (
     <TouchableOpacity onPress={handleToggle} style={[styles.card, { 
       backgroundColor: dark ? COLORS.dark2 : COLORS.white,
+      // Much stronger shadow for maximum visibility
+      shadowColor: dark ? 'rgba(231, 230, 230, 0.4)' : 'rgba(0, 0, 0, 0.4)',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: dark ? 0.8 : 0.8,
+      shadowRadius: 1,
+      elevation: 1,
+      borderColor: dark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.15)',
     }]}>
       <View style={styles.textContainer}>
         <Text style={[styles.title, { 
@@ -54,16 +61,22 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: SIZES.padding*2,
     paddingVertical: SIZES.padding,
+    // Much stronger shadow for maximum visibility
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.8,
     shadowRadius: 1,
     elevation: 1,
-    marginBottom: SIZES.base,
-    width: SIZES.width - 35,
+
+    // Add stronger border for additional contrast
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.15)',
+    marginBottom: SIZES.base + 4,
+    width: SIZES.width - 16, // Maximum width with minimal side margins (8px each side)
     height: 92,
-    marginLeft: 1.5,
-    marginRight: 1.5,
+    marginHorizontal: 4, // Minimal margins for maximum width
+    marginVertical: 4,
+    alignSelf: 'center', // Center the card within its container
   },
   textContainer: {
     flex: 1,

@@ -1,16 +1,18 @@
 import {
-    validateString,
-    validateEmail,
-    validatePassword,
-    validateNumber,
     validateCreditCardNumber,
+    validateCVV,
+    validateEmail,
     validateExpiryDate,
-    validateCVV
-  } from '../ValidationConstraints';
+    validateNumber,
+    validatePassword,
+    validateString
+} from '../ValidationConstraints';
   
   export const validateInput = (inputId: string, inputValue: string): string | undefined => {
-    if (
-      inputId === 'fullName' ||
+    // Make full name optional - no validation needed if empty
+    if (inputId === 'fullName') {
+      return inputValue.trim() === '' ? undefined : validateString(inputId, inputValue);
+    } else if (
       inputId === 'projectName' ||
       inputId === 'boardName' ||
       inputId === 'taskName' ||

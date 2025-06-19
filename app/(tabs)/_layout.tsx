@@ -1,5 +1,5 @@
 import { ProtectedRoute } from "@/components/AuthGuard";
-import { TabBarProvider, useTabBar } from "@/contexts/TabBarContext";
+import { TabBarProvider } from "@/contexts/TabBarContext";
 import { useTheme } from "@/theme/ThemeProvider";
 import { AntDesign } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
@@ -70,9 +70,9 @@ const FloatingActionButton = React.memo(() => {
 
 const TabsContent = React.memo(() => {
   const { dark } = useTheme();
-  const { tabBarTranslateY } = useTabBar();
+  // Navigation bar no longer hides on scroll - removed tabBarTranslateY
 
-  // Create animated tab bar style
+  // Create static tab bar style - no animation
   const tabBarStyle = useMemo(() => ({
     position: 'absolute' as const,
     bottom: 0,
@@ -81,8 +81,8 @@ const TabsContent = React.memo(() => {
     elevation: 0,
     height: Platform.OS === 'ios' ? 90 : 60,
     backgroundColor: dark ? COLORS.dark1 : COLORS.white,
-    transform: [{ translateY: tabBarTranslateY }],
-  }), [dark, tabBarTranslateY]);
+    // Removed transform animation - tab bar stays visible
+  }), [dark]);
 
   // Memoize screen options
   const screenOptions = useMemo(() => ({
@@ -109,7 +109,7 @@ const TabsContent = React.memo(() => {
         }}
       />
       <Tabs.Screen
-        name="project"
+        name="projects"
         options={{
           title: "",
           tabBarIcon: ({ focused }) => (

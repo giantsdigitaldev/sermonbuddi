@@ -6,7 +6,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string, fullName?: string) => Promise<{ success: boolean; error?: string }>;
+  signUp: (email: string, password: string, fullName?: string, firstName?: string, lastName?: string) => Promise<{ success: boolean; error?: string }>;
   signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<{ success: boolean; error?: string }>;
   resetPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
@@ -63,10 +63,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, []);
 
-  const signUp = async (email: string, password: string, fullName?: string) => {
+  const signUp = async (email: string, password: string, fullName?: string, firstName?: string, lastName?: string) => {
     try {
       setLoading(true);
-      const result = await AuthService.signUp({ email, password, fullName });
+      const result = await AuthService.signUp({ email, password, fullName, firstName, lastName });
       
       if (result.success) {
         // Note: User might need to verify email before they can sign in
@@ -185,7 +185,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    console.error('useAuth hook called outside of AuthProvider context');
+    console.error('Make sure the component calling useAuth is wrapped with AuthProvider');
+    
+    // Return a default state instead of throwing to prevent app crashes
+    return {
+      user: null,
+      session: null,
+      loading: true,
+      signUp: async () => ({ success: false, error: 'Auth not initialized' }),
+      signIn: async () => ({ success: false, error: 'Auth not initialized' }),
+      signOut: async () => ({ success: false, error: 'Auth not initialized' }),
+      resetPassword: async () => ({ success: false, error: 'Auth not initialized' }),
+      updatePassword: async () => ({ success: false, error: 'Auth not initialized' }),
+      isAuthenticated: false,
+      refreshUser: async () => {},
+      refreshAvatar: () => {},
+    };
   }
   return context;
 } 

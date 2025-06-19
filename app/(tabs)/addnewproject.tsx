@@ -1,6 +1,5 @@
 import { COLORS } from '@/constants';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTabBar } from '@/contexts/TabBarContext';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -78,7 +77,7 @@ const AddNewProject = () => {
   const { user } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { handleScroll, tabBarTranslateY } = useTabBar();
+  // Navigation bar no longer hides on scroll - removed handleScroll and tabBarTranslateY
   const [messages, setMessages] = useState<ChatMessageWithId[]>([]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -287,8 +286,6 @@ Let's start by telling me about your project idea. What would you like to work o
               }
             ]}
             showsVerticalScrollIndicator={false}
-            onScroll={handleScroll}
-            scrollEventThrottle={16}
             onContentSizeChange={() => {
               flatListRef.current?.scrollToEnd({ animated: true });
             }}
@@ -320,15 +317,11 @@ Let's start by telling me about your project idea. What would you like to work o
         </View>
 
         {/* Input Container - Fixed at bottom with keyboard avoidance */}
-        <Animated.View style={[
+        <View style={[
           styles.inputContainer,
           { 
             backgroundColor: dark ? COLORS.dark2 : COLORS.white,
             paddingBottom: Platform.OS === 'ios' ? insets.bottom : 16,
-            // Apply tab bar animation only when keyboard is NOT visible
-            transform: isKeyboardVisible ? [] : [{ 
-              translateY: Animated.multiply(tabBarTranslateY, 0.3)
-            }],
             // Position above tab bar when keyboard is hidden, at bottom when visible
             bottom: isKeyboardVisible ? 0 : (Platform.OS === 'ios' ? 90 : 60),
             position: 'absolute',
@@ -381,7 +374,7 @@ Let's start by telling me about your project idea. What would you like to work o
               />
             </TouchableOpacity>
           </View>
-        </Animated.View>
+        </View>
       </KeyboardAvoidingView>
     </View>
   );

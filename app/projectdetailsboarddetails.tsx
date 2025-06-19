@@ -1,11 +1,11 @@
 import Button from '@/components/Button';
 import CommentCard from '@/components/CommentCard';
 import SubHeaderItem from '@/components/SubHeaderItem';
-import TaskCard from '@/components/TaskCard';
+import SubtaskCard from '@/components/SubtaskCard';
 import UserAvatar from '@/components/UserAvatar';
 import { COLORS, icons, images, SIZES } from '@/constants';
 import { useAuth } from '@/contexts/AuthContext';
-import { projectComments, subTasks } from '@/data';
+// Removed mock data imports - using real task data instead
 import { useTheme } from '@/theme/ThemeProvider';
 import { Project, ProjectService, Task } from '@/utils/projectService';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,7 +13,7 @@ import { NavigationProp } from '@react-navigation/native';
 import { useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Image, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Calendar } from "react-native-calendars";
 import RBSheet from "react-native-raw-bottom-sheet";
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -37,10 +37,17 @@ const ProjectDetailsBoardDetails = () => {
     const [selectedDate, setSelectedDate] = useState("2024-12-14");
     const [project, setProject] = useState<Project | null>(null);
     const [task, setTask] = useState<Task | null>(null);
+    const [subtasks, setSubtasks] = useState<any[]>([]);
+    const [comments, setComments] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [editingField, setEditingField] = useState<string | null>(null);
     const [editValue, setEditValue] = useState('');
     const [completedTasks, setCompletedTasks] = useState<{ [key: string]: boolean }>({});
+    
+    // Add subtask modal state
+    const [showAddSubtaskModal, setShowAddSubtaskModal] = useState(false);
+    const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+    const [isAddingSubtask, setIsAddingSubtask] = useState(false);
 
     const handleSend = () => {
         if (comment.trim().length > 0) {
@@ -59,14 +66,24 @@ const ProjectDetailsBoardDetails = () => {
         
         try {
             setLoading(true);
-            const [projectData, tasksData] = await Promise.all([
+            const [projectData, tasksData, taskSubtasks, taskComments] = await Promise.all([
                 ProjectService.getProject(projectId),
-                ProjectService.getProjectTasks(projectId)
+                ProjectService.getProjectTasks(projectId),
+                ProjectService.getTaskSubtasks(taskId),
+                ProjectService.getTaskComments(taskId)
             ]);
             
             setProject(projectData);
             const currentTask = tasksData.find(t => t.id === taskId);
             setTask(currentTask || null);
+            setSubtasks(taskSubtasks || []);
+            setComments(taskComments || []);
+            
+            console.log('📋 Loaded task details:', {
+                task: currentTask?.title,
+                subtasks: taskSubtasks?.length || 0,
+                comments: taskComments?.length || 0
+            });
         } catch (error) {
             console.error('Error loading data:', error);
             Alert.alert('Error', 'Failed to load task data');
@@ -78,6 +95,22 @@ const ProjectDetailsBoardDetails = () => {
     useEffect(() => {
         loadData();
     }, [loadData]);
+
+    // Sync selectedStatus and selectedDate with task data when task is loaded
+    useEffect(() => {
+        if (task?.status) {
+            const statusMapping = {
+                'todo': 'To-Do',
+                'in_progress': 'In-Progress',
+                'completed': 'Completed',
+                'blocked': 'Revision'
+            };
+            setSelectedStatus(statusMapping[task.status as keyof typeof statusMapping] || 'To-Do');
+        }
+        if (task?.due_date) {
+            setSelectedDate(task.due_date);
+        }
+    }, [task?.status, task?.due_date]);
 
     useFocusEffect(
         useCallback(() => {
@@ -154,6 +187,105 @@ const ProjectDetailsBoardDetails = () => {
         );
     };
 
+    // Add subtask handling functions
+    const handleSubtaskToggle = async (subtaskId: string, completed: boolean) => {
+        try {
+            const updatedSubtask = await ProjectService.updateSubtask(subtaskId, { completed });
+            if (updatedSubtask) {
+                setSubtasks(prev => prev.map(s => 
+                    s.id === subtaskId ? { ...s, completed } : s
+                ));
+                console.log('✅ Subtask completion updated:', subtaskId, completed);
+            } else {
+                Alert.alert('Error', 'Failed to update subtask');
+            }
+        } catch (error) {
+            console.error('Error updating subtask:', error);
+            Alert.alert('Error', 'Failed to update subtask');
+        }
+    };
+
+    const handleSubtaskUpdate = async (subtaskId: string, updates: any) => {
+        try {
+            const updatedSubtask = await ProjectService.updateSubtask(subtaskId, updates);
+            if (updatedSubtask) {
+                setSubtasks(prev => prev.map(s => 
+                    s.id === subtaskId ? { ...s, ...updates } : s
+                ));
+                console.log('✅ Subtask updated:', subtaskId, updates);
+                
+                // Check if description/notes were included in updates
+                const hasDescriptionOrNotes = updates.description || updates.notes;
+                if (hasDescriptionOrNotes && (!updatedSubtask.description && !updatedSubtask.notes)) {
+                    Alert.alert(
+                        'Partial Update', 
+                        'Title updated successfully. Note: Description and notes require database schema update.'
+                    );
+                } else {
+                    Alert.alert('Success', 'Subtask updated successfully');
+                }
+            } else {
+                Alert.alert('Error', 'Failed to update subtask. Please check your connection.');
+            }
+        } catch (error) {
+            console.error('Error updating subtask:', error);
+            Alert.alert('Error', 'Failed to update subtask. Please try again.');
+        }
+    };
+
+    const handleSubtaskDelete = async (subtaskId: string) => {
+        try {
+            const success = await ProjectService.deleteSubtask(subtaskId);
+            if (success) {
+                setSubtasks(prev => prev.filter(s => s.id !== subtaskId));
+                console.log('✅ Subtask deleted:', subtaskId);
+                Alert.alert('Success', 'Subtask deleted successfully');
+            } else {
+                Alert.alert('Error', 'Failed to delete subtask');
+            }
+        } catch (error) {
+            console.error('Error deleting subtask:', error);
+            Alert.alert('Error', 'Failed to delete subtask');
+        }
+    };
+
+    const handleAddSubtask = async () => {
+        if (!newSubtaskTitle.trim()) {
+            Alert.alert('Error', 'Please enter a subtask title');
+            return;
+        }
+
+        if (!task) {
+            Alert.alert('Error', 'No task selected');
+            return;
+        }
+
+        try {
+            setIsAddingSubtask(true);
+            const newSubtask = await ProjectService.createSubtask({
+                task_id: task.id,
+                title: newSubtaskTitle.trim(),
+                completed: false,
+                order_index: subtasks.length
+            });
+
+            if (newSubtask) {
+                setSubtasks(prev => [...prev, newSubtask]);
+                setNewSubtaskTitle('');
+                setShowAddSubtaskModal(false);
+                console.log('✅ Subtask created:', newSubtask.id);
+                Alert.alert('Success', 'Subtask added successfully');
+            } else {
+                Alert.alert('Error', 'Failed to create subtask');
+            }
+        } catch (error) {
+            console.error('Error creating subtask:', error);
+            Alert.alert('Error', 'Failed to create subtask');
+        } finally {
+            setIsAddingSubtask(false);
+        }
+    };
+
     /**
     * Render header
     */
@@ -172,7 +304,7 @@ const ProjectDetailsBoardDetails = () => {
                     </TouchableOpacity>
                     <Text style={[styles.headerTitle, {
                         color: dark ? COLORS.white : COLORS.black
-                    }]}>Build Wireframe</Text>
+                    }]}>{task?.title || 'Task Details'}</Text>
                 </View>
                 <View style={styles.viewRightContainer}>
                     <TouchableOpacity>
@@ -248,8 +380,7 @@ const ProjectDetailsBoardDetails = () => {
                     <View>
                         <Text style={[styles.description, {
                             color: dark ? COLORS.grayscale100 : COLORS.greyscale900
-                        }]}>Create 24 different wireframe views each case
-                            that occurs from the application.</Text>
+                        }]}>{task?.description || 'No description available'}</Text>
                         <View style={{ marginVertical: 12 }}>
                             {/* Team Section */}
                             <View style={styles.sectionContainer}>
@@ -316,6 +447,28 @@ const ProjectDetailsBoardDetails = () => {
                                     color: dark ? COLORS.white : COLORS.greyscale900,
                                 }]}>{user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'You'}</Text>
                             </View>
+                            
+                            {/* Assigned To Section */}
+                            {task?.assigned_to && task.assigned_to.length > 0 && (
+                                <View style={styles.sectionContainer}>
+                                    <View style={styles.sectionLeftContainer}>
+                                        <Image
+                                            source={icons.addUser}
+                                            resizeMode='contain'
+                                            style={[styles.sectionIcon, {
+                                                tintColor: dark ? "#EEEEEE" : COLORS.grayscale700,
+                                            }]}
+                                        />
+                                        <Text style={[styles.sectionTitle, {
+                                            color: dark ? "#EEEEEE" : COLORS.grayscale700
+                                        }]}>Assigned To</Text>
+                                    </View>
+                                    <Text style={[styles.dueDateText, {
+                                        color: dark ? COLORS.white : COLORS.greyscale900
+                                    }]}>{task.assigned_to.length} user{task.assigned_to.length > 1 ? 's' : ''}</Text>
+                                </View>
+                            )}
+                            
                             <View style={styles.sectionContainer}>
                                 <View style={styles.sectionLeftContainer}>
                                     <Image
@@ -332,7 +485,7 @@ const ProjectDetailsBoardDetails = () => {
                                 <TouchableOpacity
                                     onPress={() => refStatusRBSheet.current.open()}
                                     style={styles.viewContainer}>
-                                    <Text style={styles.viewText}>{selectedStatus}</Text>
+                                    <Text style={styles.viewText}>{task?.status?.replace('_', ' ') || 'To-Do'}</Text>
                                 </TouchableOpacity>
                             </View>
                             <View style={styles.sectionContainer}>
@@ -350,7 +503,7 @@ const ProjectDetailsBoardDetails = () => {
                                 </View>
                                 <Text style={[styles.dueDateText, {
                                     color: dark ? COLORS.white : COLORS.greyscale900
-                                }]}>Due date: Dec 14, 2026</Text>
+                                }]}>Due date: {task?.due_date ? new Date(task.due_date).toLocaleDateString() : 'No due date'}</Text>
                                 <TouchableOpacity
                                     onPress={() => refDueDateRBSheet.current.open()}>
                                     <Image
@@ -360,6 +513,35 @@ const ProjectDetailsBoardDetails = () => {
                                     />
                                 </TouchableOpacity>
                             </View>
+                            
+                            {/* Priority Section */}
+                            <View style={styles.sectionContainer}>
+                                <View style={styles.sectionLeftContainer}>
+                                    <Image
+                                        source={icons.flag}
+                                        resizeMode='contain'
+                                        style={[styles.sectionIcon, {
+                                            tintColor: dark ? "#EEEEEE" : COLORS.grayscale700,
+                                        }]}
+                                    />
+                                    <Text style={[styles.sectionTitle, {
+                                        color: dark ? "#EEEEEE" : COLORS.grayscale700
+                                    }]}>Priority</Text>
+                                </View>
+                                <View style={[styles.viewContainer, {
+                                    backgroundColor: task?.priority === 'high' ? '#ffebee' : 
+                                                   task?.priority === 'medium' ? '#fff3e0' : 
+                                                   task?.priority === 'urgent' ? '#f3e5f5' : '#e8f5e8'
+                                }]}>
+                                    <Text style={[styles.viewText, {
+                                        color: task?.priority === 'high' ? '#d32f2f' : 
+                                               task?.priority === 'medium' ? '#f57c00' : 
+                                               task?.priority === 'urgent' ? '#7b1fa2' : '#388e3c'
+                                    }]}>{task?.priority || 'Low'}</Text>
+                                </View>
+                            </View>
+                            
+                            {/* Attachments Section */}
                             <View style={styles.sectionContainer}>
                                 <View style={styles.sectionLeftContainer}>
                                     <Image
@@ -371,16 +553,28 @@ const ProjectDetailsBoardDetails = () => {
                                     />
                                     <Text style={[styles.sectionTitle, {
                                         color: dark ? "#EEEEEE" : COLORS.grayscale700
-                                    }]}>Attachment</Text>
+                                    }]}>Attachments</Text>
                                 </View>
-                                <TouchableOpacity style={styles.refBtn}>
-                                    <Image
-                                        source={icons.document3}
-                                        resizeMode='contain'
-                                        style={styles.refBtnText}
-                                    />
-                                    <Text style={styles.refText}>References.pdf</Text>
-                                </TouchableOpacity>
+                                
+                                {/* Show actual attachments from task metadata */}
+                                {task?.metadata?.attachments && task.metadata.attachments.length > 0 ? (
+                                    task.metadata.attachments.map((attachment: any, index: number) => (
+                                        <TouchableOpacity key={index} style={styles.refBtn}>
+                                            <Image
+                                                source={icons.document3}
+                                                resizeMode='contain'
+                                                style={styles.refBtnText}
+                                            />
+                                            <Text style={styles.refText}>{attachment.name || `Attachment ${index + 1}`}</Text>
+                                        </TouchableOpacity>
+                                    ))
+                                ) : (
+                                    <Text style={[styles.dueDateText, {
+                                        color: dark ? COLORS.grayscale400 : COLORS.grayscale700,
+                                        fontSize: 14
+                                    }]}>No attachments</Text>
+                                )}
+                                
                                 <TouchableOpacity
                                     onPress={() => refAttachmentRBSheet.current.open()}
                                     style={styles.addBtn}>
@@ -403,18 +597,51 @@ const ProjectDetailsBoardDetails = () => {
                                 textColor={dark ? COLORS.white : COLORS.primary}
                             />
 
-                            <SubHeaderItem
-                                title={`Sub-Task (${subTasks.length})`}
-                                navTitle="See All"
-                                onPress={() => navigation.navigate("boarddetailssubtasks")}
-                            />
-                            <FlatList
-                                data={subTasks.slice(0, 4)}
-                                keyExtractor={(item) => item.id}
-                                renderItem={({ item }) => (
-                                    <TaskCard task={item} isCompleted={!!completedTasks[item.id]} onToggle={handleToggle} />
-                                )}
-                            />
+                            {/* Show actual subtasks from database */}
+                            {subtasks && subtasks.length > 0 && (
+                                <>
+                                    <SubHeaderItem
+                                        title={`Sub-Task (${subtasks.length})`}
+                                        navTitle="See All"
+                                        onPress={() => navigation.navigate("boarddetailssubtasks")}
+                                    />
+                                    <FlatList
+                                        data={subtasks.slice(0, 4)}
+                                        keyExtractor={(item) => item.id}
+                                        renderItem={({ item }) => (
+                                            <SubtaskCard 
+                                                subtask={item} 
+                                                onToggle={handleSubtaskToggle}
+                                                onUpdate={handleSubtaskUpdate}
+                                                onDelete={handleSubtaskDelete}
+                                            />
+                                        )}
+                                    />
+                                </>
+                            )}
+                            
+                            {/* Show message if no subtasks */}
+                            {(!subtasks || subtasks.length === 0) && (
+                                <View style={{ padding: 20, alignItems: 'center' }}>
+                                    <Text style={{ color: dark ? COLORS.grayscale400 : COLORS.grayscale700, textAlign: 'center', fontSize: 14 }}>
+                                        No subtasks yet. Add some to break down this task!
+                                    </Text>
+                                </View>
+                            )}
+                            
+                            {/* Add Subtask Button */}
+                            <TouchableOpacity
+                                onPress={() => setShowAddSubtaskModal(true)}
+                                style={[styles.addSubtaskBtn, {
+                                    backgroundColor: dark ? COLORS.dark2 : COLORS.white,
+                                    borderColor: COLORS.primary,
+                                }]}>
+                                <Ionicons name="add-circle-outline" size={20} color={COLORS.primary} />
+                                <Text style={[styles.addSubtaskText, {
+                                    color: COLORS.primary
+                                }]}>Add Subtask</Text>
+                            </TouchableOpacity>
+                            
                             <TouchableOpacity
                                 onPress={() => navigation.navigate("boarddetailssubtasks")}
                                 style={[styles.expandBtn, {
@@ -433,24 +660,38 @@ const ProjectDetailsBoardDetails = () => {
                                 }]}>Expand More</Text>
                             </TouchableOpacity>
 
-                            <SubHeaderItem
-                                title={`Comments (${projectComments.length})`}
-                                navTitle="See All"
-                                onPress={() => navigation.navigate("allcomments")}
-                            />
-                            <FlatList
-                                data={projectComments.slice(0, 3)}
-                                keyExtractor={item => item.id}
-                                renderItem={({ item }) => (
-                                    <CommentCard
-                                        avatar={item.avatar}
-                                        name={item.name}
-                                        comment={item.comment}
-                                        date={item.date}
-                                        numLikes={item.numLikes}
+                            {/* Show actual comments from database */}
+                            {comments && comments.length > 0 && (
+                                <>
+                                    <SubHeaderItem
+                                        title={`Comments (${comments.length})`}
+                                        navTitle="See All"
+                                        onPress={() => navigation.navigate("allcomments")}
                                     />
-                                )}
-                            />
+                                    <FlatList
+                                        data={comments.slice(0, 3)}
+                                        keyExtractor={item => item.id}
+                                        renderItem={({ item }) => (
+                                            <CommentCard
+                                                avatar={item.user_avatar || images.user1}
+                                                name={item.user_name || 'User'}
+                                                comment={item.content}
+                                                date={new Date(item.created_at).toLocaleDateString()}
+                                                numLikes={0}
+                                            />
+                                        )}
+                                    />
+                                </>
+                            )}
+                            
+                            {/* Show no comments message */}
+                            {(!comments || comments.length === 0) && (
+                                <View style={{ padding: 20, alignItems: 'center' }}>
+                                    <Text style={{ color: dark ? COLORS.grayscale400 : COLORS.grayscale700, textAlign: 'center', fontSize: 14 }}>
+                                        No comments yet. Be the first to comment!
+                                    </Text>
+                                </View>
+                            )}
 
                             <TouchableOpacity
                                 onPress={() => navigation.navigate("allcomments")}
@@ -530,7 +771,19 @@ const ProjectDetailsBoardDetails = () => {
                     <TouchableOpacity
                         key={status}
                         style={styles.statusOption}
-                        onPress={() => setSelectedStatus(status)}
+                        onPress={async () => {
+                            setSelectedStatus(status);
+                            // Convert display status to database status
+                            const statusMapping = {
+                                'To-Do': 'todo',
+                                'In-Progress': 'in_progress',
+                                'Completed': 'completed',
+                                'Revision': 'blocked'
+                            };
+                            const dbStatus = statusMapping[status as keyof typeof statusMapping] || 'todo';
+                            await handleTaskEdit('status', dbStatus);
+                            refStatusRBSheet.current?.close();
+                        }}
                     >
                         <Text style={[styles.statusText, {
                             color: dark ? COLORS.white : COLORS.greyscale900
@@ -643,7 +896,11 @@ const ProjectDetailsBoardDetails = () => {
                         current={"2024-12-01"}
                         minDate={"2024-12-01"}
                         maxDate={"2099-12-31"}
-                        onDayPress={(day: any) => setSelectedDate(day.dateString)}
+                        onDayPress={async (day: any) => {
+                            setSelectedDate(day.dateString);
+                            await handleTaskEdit('due_date', day.dateString);
+                            refDueDateRBSheet.current?.close();
+                        }}
                         markedDates={{
                             [selectedDate]: {
                                 selected: true,
@@ -664,8 +921,64 @@ const ProjectDetailsBoardDetails = () => {
                     />
                 </View>
             </RBSheet>
+            
+            {/* Add Subtask Modal */}
+            <Modal
+                visible={showAddSubtaskModal}
+                animationType="slide"
+                presentationStyle="pageSheet"
+                onRequestClose={() => setShowAddSubtaskModal(false)}
+            >
+                <View style={[styles.modalContainer, { 
+                    backgroundColor: dark ? COLORS.dark1 : COLORS.white 
+                }]}>
+                    <View style={styles.modalHeader}>
+                        <TouchableOpacity onPress={() => {
+                            setShowAddSubtaskModal(false);
+                            setNewSubtaskTitle('');
+                        }}>
+                            <Text style={[styles.modalButton, { color: COLORS.primary }]}>Cancel</Text>
+                        </TouchableOpacity>
+                        <Text style={[styles.modalTitle, { 
+                            color: dark ? COLORS.white : COLORS.greyscale900 
+                        }]}>Add Subtask</Text>
+                        <TouchableOpacity 
+                            onPress={handleAddSubtask}
+                            disabled={isAddingSubtask || !newSubtaskTitle.trim()}
+                            style={{ opacity: (isAddingSubtask || !newSubtaskTitle.trim()) ? 0.5 : 1 }}
+                        >
+                            <Text style={[styles.modalButton, { color: COLORS.primary }]}>
+                                {isAddingSubtask ? 'Adding...' : 'Add'}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.modalContent}>
+                        <View style={styles.inputGroup}>
+                            <Text style={[styles.inputLabel, { 
+                                color: dark ? COLORS.white : COLORS.greyscale900 
+                            }]}>Subtask Title *</Text>
+                            <TextInput
+                                style={[styles.textInput, {
+                                    backgroundColor: dark ? COLORS.dark2 : COLORS.grayscale100,
+                                    color: dark ? COLORS.white : COLORS.greyscale900,
+                                    borderColor: dark ? COLORS.dark3 : COLORS.grayscale200,
+                                }]}
+                                value={newSubtaskTitle}
+                                onChangeText={setNewSubtaskTitle}
+                                placeholder="Enter subtask title"
+                                placeholderTextColor={dark ? COLORS.grayscale400 : COLORS.grayscale700}
+                                autoComplete="off"
+                                autoCorrect={false}
+                                selectTextOnFocus={false}
+                                autoFocus
+                            />
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
-    )
+    );
 };
 
 const styles = StyleSheet.create({
@@ -1017,6 +1330,56 @@ const styles = StyleSheet.create({
          height: 30,
          borderRadius: 15,
          marginLeft: 0,
+     },
+     addSubtaskBtn: {
+         width: SIZES.width - 32,
+         paddingHorizontal: SIZES.padding,
+         paddingVertical: SIZES.padding,
+         borderRadius: 25,
+         alignItems: 'center',
+         justifyContent: 'center',
+         height: 52,
+         flexDirection: "row",
+     },
+     addSubtaskText: {
+         fontSize: 16,
+         fontFamily: "bold",
+         color: COLORS.primary,
+     },
+     modalContainer: {
+         flex: 1,
+         padding: 20,
+     },
+     modalHeader: {
+         flexDirection: 'row',
+         alignItems: 'center',
+         justifyContent: 'space-between',
+         marginBottom: 20,
+     },
+     modalButton: {
+         fontSize: 18,
+         fontFamily: 'bold',
+     },
+     modalTitle: {
+         fontSize: 24,
+         fontFamily: 'bold',
+     },
+     modalContent: {
+         flex: 1,
+     },
+     inputGroup: {
+         flex: 1,
+     },
+     inputLabel: {
+         fontSize: 18,
+         fontFamily: 'bold',
+         marginBottom: 10,
+     },
+     textInput: {
+         flex: 1,
+         padding: 10,
+         borderWidth: 1,
+         borderColor: COLORS.grayscale200,
      },
  });
 

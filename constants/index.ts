@@ -1,7 +1,7 @@
 import icons from "./icons";
-import images from "./images";
 import illustrations from "./illustrations";
-import theme, { COLORS, SIZES, FONTS } from "./theme";
+import images from "./images";
 import socials from "./socials";
+import theme, { COLORS, FONTS, SIZES, WEB_INPUT_STYLES } from "./theme";
 
-export { images, illustrations, icons, socials, theme, COLORS, SIZES, FONTS };
+export { COLORS, FONTS, icons, illustrations, images, SIZES, socials, theme, WEB_INPUT_STYLES };

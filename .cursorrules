@@ -1,5 +1,371 @@
-# IMPORTANT Write the code as if the guy who ended up maintaining your code will be a violent psychopath who knows where you live.
-# Cursor AI Rules - Complete Error Prevention System
+# IMPORTANT Write the code as if the guy in charge of maintaining your code is a violent psychopath who knows where you live.
+
+# Cursor AI Rules - Complete Error Prevention System + UI/UX Design Preservation
+
+## 🎨 CRITICAL: UI/UX DESIGN PRESERVATION PROTOCOL
+
+### MANDATORY PRE-DESIGN RESEARCH
+Before creating ANY new UI components, screens, or design elements:
+
+1. **ALWAYS conduct comprehensive design audit first** using research tools
+2. **NEVER create custom designs** without verifying no existing patterns exist
+3. **ALWAYS use existing design systems, templates, and components**
+4. **PRESERVE existing UI/UX patterns** and maintain design consistency
+5. **RESEARCH existing design files** before any UI-related modifications
+
+### UI/UX DESIGN HIERARCHY RULES
+
+#### 🚨 MANDATORY DESIGN RESEARCH SEQUENCE:
+1. **Design System Audit** - Check for existing design system files
+2. **Component Library Review** - Verify existing UI components
+3. **Template Analysis** - Identify reusable templates and patterns
+4. **Style Guide Inspection** - Review colors, typography, spacing
+5. **Screen Pattern Review** - Analyze existing screen layouts
+6. **Only then** - Create new designs if absolutely nothing exists
+
+#### ❌ FORBIDDEN DESIGN ACTIONS:
+- Creating new UI components without checking existing ones first
+- Designing custom layouts when templates exist
+- Using arbitrary colors, fonts, or spacing without checking design system
+- Creating new navigation patterns when existing ones are available
+- Implementing custom animations without reviewing existing motion patterns
+- Building new form designs when form templates exist
+- Creating new card/list designs when existing patterns are available
+- Using random icon sets instead of checking existing icon library
+- Implementing custom loading states when existing ones are available
+- Creating new modal/popup designs without checking existing patterns
+
+#### ✅ REQUIRED DESIGN RESEARCH ACTIONS:
+
+##### 1. **Design System File Discovery:**
+```
+Before ANY UI work:
+- Use file_search to find: design-system.*, theme.*, styles.*, tokens.*
+- Use list_dir to check: /design/, /styles/, /theme/, /ui/, /components/
+- Use read_file to examine: tailwind.config.*, styled-components themes
+- Search for: colors.*, typography.*, spacing.*, breakpoints.*
+```
+
+##### 2. **Component Library Audit:**
+```
+Before creating components:
+- Use file_search to find: /components/, /ui/, /shared/, /common/
+- Check for: Button.*, Input.*, Card.*, Modal.*, Navigation.*
+- Use read_file to examine existing component implementations
+- Verify: props, styling patterns, state management approaches
+- Check for: styled-components, Tailwind classes, CSS modules
+```
+
+##### 3. **Template Pattern Analysis:**
+```
+Before designing screens:
+- Use file_search to find: /templates/, /layouts/, /screens/, /pages/
+- Check for: layout components, screen templates, page structures
+- Use read_file to examine: header/footer patterns, navigation layouts
+- Verify: responsive patterns, grid systems, container structures
+- Look for: master layouts, template components, screen scaffolding
+```
+
+##### 4. **Style Guide Verification:**
+```
+Before applying styles:
+- Search for: colors, palette, brand, guidelines, style-guide
+- Use read_file to examine: CSS variables, theme objects, color constants
+- Check for: typography scales, spacing systems, elevation/shadows
+- Verify: animation/transition patterns, responsive breakpoints
+- Look for: brand guidelines, design token files
+```
+
+##### 5. **Icon and Asset Discovery:**
+```
+Before using icons/images:
+- Use file_search to find: /icons/, /assets/, /images/, IconComponents
+- Check for: icon libraries, SVG collections, image assets
+- Verify: existing icon naming conventions, size variants
+- Look for: brand assets, logos, illustration patterns
+```
+
+### DESIGN CONSISTENCY ENFORCEMENT
+
+#### Pattern Matching Requirements:
+```typescript
+// ✅ GOOD - Use existing component patterns
+// Step 1: Found existing Button component via file_search
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+
+// Step 2: Match existing styling patterns
+<Card className="bg-white shadow-md rounded-lg p-6">
+  <Button variant="primary" size="lg">
+    Continue
+  </Button>
+</Card>
+
+// ❌ BAD - Creating custom designs without research
+<div style={{
+  backgroundColor: '#ff0000', // Random color
+  padding: '20px',           // Custom spacing
+  borderRadius: '5px'        // Custom radius
+}}>
+  <button style={{
+    backgroundColor: '#00ff00', // Random color
+    padding: '10px 20px'       // Custom padding
+  }}>
+    Continue
+  </button>
+</div>
+```
+
+#### Color System Adherence:
+```typescript
+// ✅ GOOD - Use existing color system
+// Step 1: Found theme colors via read_file of theme.ts
+const colors = {
+  primary: '#3B82F6',    // From existing theme
+  secondary: '#6B7280',  // From existing theme
+  success: '#10B981',    // From existing theme
+}
+
+// ❌ BAD - Random color choices
+const colors = {
+  primary: '#ff5733',    // Random color
+  secondary: '#c70039',  // Not from design system
+  success: '#900c3f',    // Inconsistent with brand
+}
+```
+
+#### Typography Consistency:
+```typescript
+// ✅ GOOD - Use existing typography system
+// Step 1: Found typography scale via read_file of styles
+<Text className="text-lg font-semibold text-gray-900">
+  Heading
+</Text>
+<Text className="text-base text-gray-600">
+  Body text
+</Text>
+
+// ❌ BAD - Custom typography without system
+<Text style={{
+  fontSize: 22,           // Random size
+  fontWeight: '700',      // Custom weight
+  color: '#123456'        // Random color
+}}>
+  Heading
+</Text>
+```
+
+### COMPONENT REUSE ENFORCEMENT
+
+#### Mandatory Component Discovery Process:
+```
+1. Search existing components: file_search "Button" "Card" "Input" "Modal"
+2. Read component implementations: read_file for each found component
+3. Analyze component APIs: props, variants, styling options
+4. Check for composition patterns: how components work together
+5. Verify accessibility patterns: existing a11y implementations
+6. Only create new if gap identified and documented
+```
+
+#### Component Extension vs Creation:
+```typescript
+// ✅ GOOD - Extend existing component
+// Step 1: Found existing Button via research
+import { Button } from '@/components/ui/Button';
+
+// Step 2: Extend with new variant if needed
+<Button variant="outline" size="sm" icon="plus">
+  Add Item
+</Button>
+
+// ❌ BAD - Create new button without checking existing
+const CustomButton = styled.TouchableOpacity`
+  background-color: #3B82F6;
+  padding: 12px 24px;
+  border-radius: 8px;
+`;
+```
+
+### LAYOUT TEMPLATE PRESERVATION
+
+#### Screen Layout Research Protocol:
+```
+Before designing any new screen:
+1. Use file_search to find: /layouts/, /templates/, /screens/
+2. Use list_dir to examine: app structure, navigation patterns
+3. Use read_file to analyze: existing screen implementations
+4. Check for: header patterns, navigation structures, content layouts
+5. Verify: responsive patterns, safe area handling, platform differences
+6. Document: any gaps in existing templates before creating new
+```
+
+#### Template Hierarchy Respect:
+```typescript
+// ✅ GOOD - Use existing layout template
+// Step 1: Found ScreenTemplate via research
+import { ScreenTemplate } from '@/components/templates/ScreenTemplate';
+import { Header } from '@/components/layout/Header';
+
+export default function NewScreen() {
+  return (
+    <ScreenTemplate
+      header={<Header title="New Screen" showBack />}
+      scrollable
+      padding="lg"
+    >
+      {/* Content using existing components */}
+    </ScreenTemplate>
+  );
+}
+
+// ❌ BAD - Create custom layout without checking templates
+export default function NewScreen() {
+  return (
+    <View style={{ flex: 1, backgroundColor: '#fff' }}>
+      <View style={{ height: 60, backgroundColor: '#f0f0f0' }}>
+        {/* Custom header */}
+      </View>
+      <ScrollView style={{ padding: 16 }}>
+        {/* Custom content */}
+      </ScrollView>
+    </View>
+  );
+}
+```
+
+### DESIGN RESEARCH DOCUMENTATION
+
+#### Required Research Documentation:
+```typescript
+// MANDATORY: Document design research in comments
+/*
+DESIGN RESEARCH COMPLETED:
+✅ Checked /components/ui/ - Found Button, Card, Input components
+✅ Checked /styles/theme.ts - Found color system and typography
+✅ Checked /templates/ - Found ScreenTemplate and FormTemplate
+✅ Analyzed existing patterns - Header, navigation, form layouts
+❌ No existing loading spinner component found
+✅ DECISION: Creating LoadingSpinner as no existing pattern found
+
+REUSED COMPONENTS:
+- Button (variant="primary")
+- Card (shadow="md") 
+- ScreenTemplate (padding="lg")
+
+NEW COMPONENTS JUSTIFIED:
+- LoadingSpinner: No existing loading pattern found after thorough search
+*/
+
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { ScreenTemplate } from '@/components/templates/ScreenTemplate';
+// Only create LoadingSpinner after research confirmed no existing pattern
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'; // JUSTIFIED
+```
+
+### STYLE SYSTEM INTEGRATION
+
+#### CSS/Styling Pattern Adherence:
+```typescript
+// ✅ GOOD - Use existing styling patterns
+// Step 1: Found existing styling approach via read_file
+import { styles } from '@/styles/commonStyles';
+import { colors } from '@/styles/colors';
+
+const componentStyles = StyleSheet.create({
+  container: {
+    ...styles.cardBase,        // Reuse existing pattern
+    backgroundColor: colors.surface, // Use design tokens
+    marginBottom: styles.spacing.md, // Use spacing system
+  },
+});
+
+// ❌ BAD - Custom styles without checking system
+const componentStyles = StyleSheet.create({
+  container: {
+    backgroundColor: '#ffffff',  // Hardcoded color
+    padding: 16,                // Custom spacing
+    borderRadius: 8,            // Custom radius
+    shadowOffset: { width: 0, height: 2 }, // Custom shadow
+  },
+});
+```
+
+### RESPONSIVE PATTERN PRESERVATION
+
+#### Breakpoint System Discovery:
+```
+Before implementing responsive design:
+1. Search for: breakpoints, responsive, media, screen
+2. Check for: existing responsive utilities, grid systems
+3. Verify: how existing components handle different screen sizes
+4. Look for: platform-specific patterns (iOS/Android differences)
+5. Use existing responsive patterns before creating new ones
+```
+
+#### Responsive Implementation Consistency:
+```typescript
+// ✅ GOOD - Use existing responsive patterns
+// Step 1: Found responsive utilities via research
+import { useResponsive } from '@/hooks/useResponsive';
+import { breakpoints } from '@/styles/breakpoints';
+
+const { isTablet, isMobile } = useResponsive();
+
+// Step 2: Use existing responsive patterns
+<View style={[
+  styles.container,
+  isTablet && styles.containerTablet,
+  isMobile && styles.containerMobile
+]}>
+
+// ❌ BAD - Custom responsive without checking existing
+const screenWidth = Dimensions.get('window').width;
+<View style={{
+  padding: screenWidth > 768 ? 24 : 16, // Custom breakpoint
+  flexDirection: screenWidth > 768 ? 'row' : 'column' // Custom logic
+}}>
+```
+
+### ANIMATION AND MOTION CONSISTENCY
+
+#### Animation Pattern Discovery:
+```
+Before adding animations:
+1. Search for: animation, transition, motion, spring, timing
+2. Check for: existing animation utilities, transition patterns
+3. Verify: brand motion guidelines, timing curves, easing functions
+4. Look for: loading animations, page transitions, micro-interactions
+5. Use existing motion patterns for consistency
+```
+
+### ACCESSIBILITY PATTERN PRESERVATION
+
+#### A11y Research Requirements:
+```
+Before implementing accessibility:
+1. Check existing components for: accessibility patterns
+2. Verify: screen reader support, focus management, color contrast
+3. Look for: existing a11y utilities, testing patterns
+4. Use: established accessibility patterns before creating new
+5. Maintain: consistent accessibility experience
+```
+
+### DESIGN VALIDATION CHECKLIST
+
+Before ANY UI/UX implementation:
+- [ ] **Design system files researched** (colors, typography, spacing)
+- [ ] **Component library audited** (existing UI components found)
+- [ ] **Template patterns analyzed** (layout and screen templates)
+- [ ] **Style guide reviewed** (brand guidelines, patterns)
+- [ ] **Icon library checked** (existing icon systems)
+- [ ] **Animation patterns discovered** (motion and transitions)
+- [ ] **Responsive patterns verified** (breakpoints, grid systems)
+- [ ] **Accessibility patterns confirmed** (a11y implementations)
+- [ ] **Research documented** (what was found vs what needs creation)
+- [ ] **Existing patterns reused** (maximum component/pattern reuse)
+- [ ] **New designs justified** (documented why new creation needed)
+- [ ] **Design consistency maintained** (follows established patterns)
 
 ## 🚨 CRITICAL: EXPO BUNDLING ERROR PREVENTION
 
@@ -561,9 +927,11 @@ TypeError: _coherencyScoreService.CoherencyScoreService is not a constructor
 - Never assume class names from file names
 - Verify classes have accessible constructors
 
-## 🎯 GOAL: ZERO BUNDLING ERRORS
+## 🎯 GOALS: ZERO BUNDLING ERRORS + PERFECT DESIGN CONSISTENCY
 
 Every import must be verified. Every path must be tested. Every variable must be unique. Every syntax structure must be complete. Every route file must have actual content. Never assume file structure. Always verify before modifying.
+
+**Every design must respect existing patterns. Every component must reuse existing ones. Every style must follow the design system. Never create custom designs without research. Always preserve UI/UX consistency.**
 
 ### ERROR RECOVERY COMMANDS
 

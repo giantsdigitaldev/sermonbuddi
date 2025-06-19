@@ -36,7 +36,7 @@ const OptimizedUserAvatar: React.FC<OptimizedUserAvatarProps> = ({
 
   const targetUserId = userId || user?.id;
 
-  const loadAvatar = useCallback(async () => {
+  const loadAvatar = useCallback(async (forceReload = false) => {
     if (!targetUserId) {
       setAvatarState({
         source: images.user1,
@@ -50,6 +50,7 @@ const OptimizedUserAvatar: React.FC<OptimizedUserAvatarProps> = ({
       // 🚀 OPTIMIZED: Use cache service for instant avatar loading
       const cacheKey = `user_avatar:${targetUserId}`;
       
+      // If forceReload is true, skip cache and reload from database
       const avatarResult = await cacheService.get(
         cacheKey,
         async () => {
@@ -79,15 +80,20 @@ const OptimizedUserAvatar: React.FC<OptimizedUserAvatarProps> = ({
           // Final fallback
           return { fallback: true };
         },
-        { ttl: 10 * 60 * 1000 } // 10 minutes cache for avatars
+        { 
+          ttl: 10 * 60 * 1000, // 10 minutes cache for avatars
+          forceRefresh: forceReload // Skip cache if forceReload is true
+        }
       );
 
       // Check if this was a cache hit for performance monitoring
       const stats = cacheService.getStats();
-      const wasCacheHit = stats.hits > 0;
+      const wasCacheHit = stats.hits > 0 && !forceReload;
 
       if (wasCacheHit) {
         console.log('⚡ Avatar loaded from cache instantly');
+      } else if (forceReload) {
+        console.log('🔄 Avatar force reloaded from database');
       }
 
       setAvatarState({
@@ -202,9 +208,9 @@ const styles = StyleSheet.create({
   },
   cacheIndicator: {
     position: 'absolute',
-    top: -5,
-    right: -5,
-    backgroundColor: COLORS.success,
+    top: 0,
+    right: 0,
+    backgroundColor: COLORS.primary,
     borderRadius: 10,
     width: 20,
     height: 20,
@@ -212,8 +218,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cacheText: {
-    fontSize: 10,
     color: COLORS.white,
+    fontSize: 10,
+    fontWeight: 'bold',
   },
 });
 

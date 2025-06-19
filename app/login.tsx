@@ -1,5 +1,5 @@
 import Checkbox from 'expo-checkbox';
-import { useNavigation } from 'expo-router';
+import { useLocalSearchParams, useNavigation } from 'expo-router';
 import React, { useCallback, useEffect, useReducer, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -37,11 +37,13 @@ type Nav = {
 const Login = () => {
     const { navigate } = useNavigation<Nav>();
     const [formState, dispatchFormState] = useReducer(reducer, initialState);
+    const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isChecked, setChecked] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
     const { colors, dark } = useTheme();
     const { signIn } = useAuth();
+    const params = useLocalSearchParams();
+    const [showWelcome, setShowWelcome] = useState(false);
 
     const inputChangedHandler = useCallback(
         (inputId: string, inputValue: string) => {
@@ -49,9 +51,9 @@ const Login = () => {
             dispatchFormState({
                 inputId,
                 validationResult: result,
-                inputValue,
+                inputValue
             })
-        }, [dispatchFormState]);
+        }, [dispatchFormState])
 
     useEffect(() => {
         if (error) {
@@ -60,6 +62,15 @@ const Login = () => {
             ]);
         }
     }, [error]);
+
+    // Check if user arrived from email confirmation
+    useEffect(() => {
+        if (params.confirmed === 'true' || params.welcome === 'true') {
+            setShowWelcome(true);
+            // Auto-hide welcome message after 5 seconds
+            setTimeout(() => setShowWelcome(false), 5000);
+        }
+    }, [params]);
 
     const handleLogin = async () => {
         const { email, password } = formState.inputValues;
@@ -123,6 +134,12 @@ const Login = () => {
                     backgroundColor: colors.background
                 }]}>
                     <Header title="" />
+                    {showWelcome && (
+                        <View style={styles.welcomeBanner}>
+                            <Text style={styles.welcomeTitle}>Welcome to CristOS! 🎉</Text>
+                            <Text style={styles.welcomeMessage}>Your email has been confirmed. You can now sign in to your account.</Text>
+                        </View>
+                    )}
                     <ScrollView showsVerticalScrollIndicator={false}>
                         <View style={styles.titleContainer}>
                             <Text style={[styles.title, { color: dark ? COLORS.white : COLORS.greyscale900 }]}>Login to your</Text>
@@ -306,6 +323,23 @@ const styles = StyleSheet.create({
         color: COLORS.primary,
         textAlign: "center",
         marginTop: 12
+    },
+    welcomeBanner: {
+        backgroundColor: COLORS.primary,
+        padding: 16,
+        borderRadius: 8,
+        marginBottom: 16
+    },
+    welcomeTitle: {
+        fontSize: 24,
+        fontFamily: "bold",
+        color: COLORS.white,
+        marginBottom: 8
+    },
+    welcomeMessage: {
+        fontSize: 16,
+        fontFamily: "regular",
+        color: COLORS.white
     }
 })
 

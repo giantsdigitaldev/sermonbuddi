@@ -1,10 +1,9 @@
 import Button from '@/components/Button';
-import OptimizedUserAvatar from '@/components/OptimizedUserAvatar';
+import OptimizedUserAvatar, { useAvatarCache } from '@/components/OptimizedUserAvatar';
 import SettingsItem from '@/components/SettingsItem';
 import { COLORS, icons, images, SIZES } from '@/constants';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/theme/ThemeProvider';
-import { cacheService } from '@/utils/cacheService';
 import { ProfileService } from '@/utils/profileService';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from 'expo-router';
@@ -24,6 +23,10 @@ const Profile = () => {
   const { navigate } = useNavigation<Nav>();
   const { user, signOut, loading } = useAuth();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const { invalidateAvatar } = useAvatarCache();
+  
+  const [avatarKey, setAvatarKey] = useState(0);
+
   /**
    * Render header
    */
@@ -56,6 +59,14 @@ const Profile = () => {
   /**
    * Render User Profile
    */
+  // Function to get time-based greeting
+  const getTimeBasedGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  };
+
   const renderProfile = () => {
     const pickImage = async () => {
       try {
@@ -68,10 +79,27 @@ const Profile = () => {
         const result = await ProfileService.pickAndUploadProfileImage(user.id);
         
         if (result.success && result.url) {
-          Alert.alert('Success', 'Profile image updated successfully!');
-          // 🚀 OPTIMIZED: Invalidate the avatar cache to show the new image instantly
-          await cacheService.invalidate(`user_avatar:${user.id}`);
-          console.log('🗑️ Avatar cache invalidated after upload');
+          // 🚀 FIXED: Update the profile database with the new avatar URL
+          try {
+            const updateResult = await ProfileService.updateProfile({
+              avatar_url: result.url
+            });
+            
+            if (updateResult.success) {
+              // 🚀 FIXED: Properly invalidate and reload avatar
+              await invalidateAvatar(user.id);
+              setAvatarKey(prev => prev + 1);
+              
+              Alert.alert('Success', 'Profile image updated successfully!');
+              console.log('🗑️ Avatar cache invalidated and component reloaded');
+            } else {
+              console.warn('Failed to update profile with new avatar:', updateResult.error);
+              Alert.alert('Warning', 'Image uploaded but failed to save to profile database.');
+            }
+          } catch (profileError) {
+            console.error('Error updating profile with new avatar:', profileError);
+            Alert.alert('Warning', 'Image uploaded but failed to save to profile database.');
+          }
         } else if (result.error && !result.error.includes('cancelled')) {
           console.error('Image upload failed:', result.error);
           Alert.alert('Upload Failed', result.error);
@@ -83,13 +111,27 @@ const Profile = () => {
     };
 
     // Use real user data from Supabase
-    const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
+    const fullName = user?.user_metadata?.full_name || user?.user_metadata?.name || '';
+    const firstName = user?.user_metadata?.first_name || fullName.split(' ')[0] || user?.email?.split('@')[0] || 'User';
+    const userName = fullName || user?.email?.split('@')[0] || 'User';
     const userEmail = user?.email || 'No email available';
+    const greeting = getTimeBasedGreeting();
 
     return (
       <View style={styles.profileContainer}>
+        {/* Personalized Greeting */}
+        <View style={styles.greetingContainer}>
+          <Text style={[styles.greetingText, { color: dark ? COLORS.white : COLORS.greyscale900 }]}>
+            {greeting}, {firstName}!
+          </Text>
+          <Text style={[styles.greetingSubtext, { color: dark ? COLORS.grayscale400 : COLORS.grayscale700 }]}>
+            Welcome to your profile
+          </Text>
+        </View>
+        
         <View>
           <OptimizedUserAvatar
+            key={avatarKey}
             size={120}
             style={styles.avatar}
             showLoading={true}
@@ -369,6 +411,23 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.grayscale400,
     borderBottomWidth: .4,
     paddingVertical: 20
+  },
+  greetingContainer: {
+    alignItems: "center",
+    marginBottom: 20
+  },
+  greetingText: {
+    fontSize: 24,
+    fontFamily: "bold",
+    color: COLORS.greyscale900,
+    textAlign: "center"
+  },
+  greetingSubtext: {
+    fontSize: 16,
+    fontFamily: "medium",
+    color: COLORS.grayscale700,
+    textAlign: "center",
+    marginTop: 4
   },
   avatar: {
     width: 120,

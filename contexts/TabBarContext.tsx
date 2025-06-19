@@ -23,10 +23,11 @@ interface TabBarProviderProps {
 }
 
 export const TabBarProvider: React.FC<TabBarProviderProps> = ({ children }) => {
+  // Keep tab bar always visible - no animation
   const tabBarTranslateY = useRef(new Animated.Value(0)).current;
-  const lastScrollY = useRef(0);
 
   const showTabBar = () => {
+    // Tab bar is always visible, no need to animate
     Animated.timing(tabBarTranslateY, {
       toValue: 0,
       duration: 300,
@@ -35,43 +36,19 @@ export const TabBarProvider: React.FC<TabBarProviderProps> = ({ children }) => {
   };
 
   const hideTabBar = () => {
+    // Tab bar stays visible, no hiding functionality
     Animated.timing(tabBarTranslateY, {
-      toValue: 100, // Height of tab bar
+      toValue: 0, // Changed from 100 to 0 - don't hide
       duration: 300,
       useNativeDriver: true,
     }).start();
   };
 
-  // Handle scroll events for tab bar animation
-  const handleScroll = Animated.event(
-    [{ nativeEvent: { contentOffset: { y: new Animated.Value(0) } } }],
-    {
-      useNativeDriver: false,
-      listener: (event: any) => {
-        const currentScrollY = event.nativeEvent.contentOffset.y;
-        const scrollDirection = currentScrollY > lastScrollY.current ? 'down' : 'up';
-        
-        // Show/hide tab bar based on scroll direction
-        if (scrollDirection === 'down' && currentScrollY > 50) {
-          // Scrolling down - hide tab bar
-          Animated.timing(tabBarTranslateY, {
-            toValue: 80,
-            duration: 200,
-            useNativeDriver: true,
-          }).start();
-        } else if (scrollDirection === 'up' || currentScrollY <= 50) {
-          // Scrolling up or near top - show tab bar
-          Animated.timing(tabBarTranslateY, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true,
-          }).start();
-        }
-        
-        lastScrollY.current = currentScrollY;
-      },
-    }
-  );
+  // No-op scroll handler - tab bar stays visible regardless of scroll
+  const handleScroll = () => {
+    // Removed scroll-based hiding logic
+    // Tab bar remains visible at all times
+  };
 
   const value: TabBarContextType = {
     tabBarTranslateY,

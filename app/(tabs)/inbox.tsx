@@ -1,11 +1,17 @@
+import { COLORS } from '@/constants/theme';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+    TeamService,
+    type NotificationData,
+    type TeamInvitation
+} from '@/utils/teamService';
 import { Ionicons } from '@expo/vector-icons';
-import { NavigationProp, useFocusEffect, useNavigation } from '@react-navigation/native';
-import React, { useCallback, useState } from 'react';
+import { router } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
     FlatList,
-    Image,
     RefreshControl,
     StyleSheet,
     Text,
@@ -13,480 +19,383 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS, icons, images } from '../../constants';
-import { useTheme } from '../../theme/ThemeProvider';
-import { ChatService, ChatSession } from '../../utils/chatService';
 
-const Inbox = () => {
-  const navigation = useNavigation<NavigationProp<any>>();
-  const { colors, dark } = useTheme();
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+interface InboxItem {
+  id: string;
+  type: 'notification' | 'invitation';
+  title: string;
+  message: string;
+  timestamp: string;
+  read: boolean;
+  data?: any;
+}
 
-  // Load chat sessions
-  const loadChatSessions = useCallback(async () => {
+export default function InboxScreen() {
+  const { user } = useAuth();
+  const [inboxItems, setInboxItems] = useState<InboxItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [processingInvitation, setProcessingInvitation] = useState<string | null>(null);
+
+  const loadInboxData = async () => {
+    if (!user) return;
+
     try {
-      setIsLoading(true);
-      const chatSessions = await ChatService.getChatSessions();
-      setSessions(chatSessions);
+      setLoading(true);
+      
+      // Load notifications and invitations in parallel
+      const [notifications, invitations] = await Promise.all([
+        TeamService.getUserNotifications(user.id),
+        TeamService.getUserInvitations()
+      ]);
+
+      // Combine notifications and invitations into inbox items
+      const items: InboxItem[] = [
+        // Map notifications
+        ...notifications.map((notification: NotificationData) => ({
+          id: `notification-${notification.id}`,
+          type: 'notification' as const,
+          title: notification.title,
+          message: notification.message,
+          timestamp: notification.created_at,
+          read: notification.read,
+          data: notification.data
+        })),
+        // Map invitations
+        ...invitations.map((invitation: TeamInvitation) => ({
+          id: `invitation-${invitation.id}`,
+          type: 'invitation' as const,
+          title: 'Project Invitation',
+          message: `${invitation.inviter_name} invited you to join ${invitation.project_name} as ${invitation.role}`,
+          timestamp: invitation.created_at,
+          read: false, // Invitations are always unread until accepted/declined
+          data: {
+            invitation_code: invitation.invitation_code,
+            project_id: invitation.project_id,
+            project_name: invitation.project_name,
+            role: invitation.role
+          }
+        }))
+      ];
+
+      // Sort by timestamp (newest first)
+      items.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+      setInboxItems(items);
     } catch (error) {
-      console.error('Error loading chat sessions:', error);
-      Alert.alert('Error', 'Failed to load chat sessions. Please try again.');
+      console.error('❌ Error loading inbox data:', error);
+      Alert.alert('Error', 'Failed to load inbox data');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
-  }, []);
+  };
 
-  // Refresh chat sessions
-  const onRefresh = useCallback(async () => {
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadInboxData();
+    setRefreshing(false);
+  };
+
+  const handleAcceptInvitation = async (item: InboxItem) => {
+    if (!item.data?.invitation_code) return;
+
     try {
-      setIsRefreshing(true);
-      const chatSessions = await ChatService.getChatSessions();
-      setSessions(chatSessions);
+      setProcessingInvitation(item.id);
+      
+      const result = await TeamService.acceptInvitation(item.data.invitation_code);
+      
+      if (result.success) {
+        Alert.alert(
+          'Invitation Accepted!',
+          `You've joined ${result.projectName} as ${result.role}`,
+          [
+            {
+              text: 'View Project',
+              onPress: () => router.push(`/dashboard/${result.projectId}`)
+            },
+            { text: 'OK' }
+          ]
+        );
+        
+        // Refresh inbox to remove accepted invitation
+        await loadInboxData();
+      }
     } catch (error) {
-      console.error('Error refreshing chat sessions:', error);
-      Alert.alert('Error', 'Failed to refresh chat sessions. Please try again.');
+      console.error('❌ Error accepting invitation:', error);
+      Alert.alert('Error', 'Failed to accept invitation. Please try again.');
     } finally {
-      setIsRefreshing(false);
-    }
-  }, []);
-
-  // Load sessions when screen focuses
-  useFocusEffect(
-    useCallback(() => {
-      loadChatSessions();
-    }, [loadChatSessions])
-  );
-
-  // Format date for display
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
-
-    if (diffInHours < 24) {
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } else if (diffInHours < 24 * 7) {
-      return date.toLocaleDateString([], { weekday: 'short' });
-    } else {
-      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      setProcessingInvitation(null);
     }
   };
 
-  // Handle chat session press
-  const handleSessionPress = (sessionId: string) => {
-    navigation.navigate('aiassistant', { conversationId: sessionId });
-  };
-
-  // Handle delete session
-  const handleDeleteSession = async (sessionId: string, sessionTitle: string) => {
-    Alert.alert(
-      'Delete Conversation',
-      `Are you sure you want to delete "${sessionTitle}"? This action cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await ChatService.deleteConversation(sessionId);
-              setSessions(prev => prev.filter(session => session.id !== sessionId));
-            } catch (error) {
-              console.error('Error deleting session:', error);
-              Alert.alert('Error', 'Failed to delete conversation. Please try again.');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  // Create new chat session
-  const handleNewChat = async () => {
-    try {
-      const conversationId = await ChatService.createConversation();
-      navigation.navigate('aiassistant', { conversationId });
-    } catch (error) {
-      console.error('Error creating new chat:', error);
-      Alert.alert('Error', 'Failed to create new chat. Please try again.');
+  const handleMarkAsRead = async (item: InboxItem) => {
+    if (item.type === 'notification' && !item.read) {
+      try {
+        const notificationId = item.id.replace('notification-', '');
+        await TeamService.markNotificationAsRead(notificationId);
+        
+        // Update local state
+        setInboxItems(prev => 
+          prev.map(inboxItem => 
+            inboxItem.id === item.id 
+              ? { ...inboxItem, read: true }
+              : inboxItem
+          )
+        );
+      } catch (error) {
+        console.error('❌ Error marking notification as read:', error);
+      }
     }
   };
 
-  // Render header
-  const renderHeader = () => {
-    return (
-      <View style={styles.headerContainer}>
-        <View style={styles.headerLeft}>
-          <Image
-            source={images.logo}
-            resizeMode='contain'
-            style={styles.headerLogo}
-          />
-          <Text style={[styles.headerTitle, {
-            color: dark ? COLORS.white : COLORS.greyscale900
-          }]}>AI Assistant</Text>
-        </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity onPress={() => navigation.navigate('chatsessions')}>
-            <Ionicons
-              name="list-outline"
-              size={24}
-              color={dark ? COLORS.secondaryWhite : COLORS.greyscale900}
-            />
-          </TouchableOpacity>
-          <TouchableOpacity style={{ marginLeft: 12 }}>
-            <Image
-              source={icons.moreCircle}
-              resizeMode='contain'
-              style={[styles.moreCircleIcon, {
-                tintColor: dark ? COLORS.secondaryWhite : COLORS.greyscale900
-              }]}
-            />
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
+  const handleItemPress = (item: InboxItem) => {
+    handleMarkAsRead(item);
+
+    if (item.type === 'invitation') {
+      // Show invitation details with accept/decline options
+      Alert.alert(
+        'Team Invitation',
+        item.message,
+        [
+          { text: 'Decline', style: 'cancel' },
+          {
+            text: 'Accept',
+            onPress: () => handleAcceptInvitation(item)
+          }
+        ]
+      );
+    } else if (item.data?.action_url) {
+      // Navigate to action URL if available
+      router.push(item.data.action_url);
+    }
   };
 
-  // Render chat session item
-  const renderSessionItem = ({ item }: { item: ChatSession }) => (
+  const renderInboxItem = ({ item }: { item: InboxItem }) => (
     <TouchableOpacity
       style={[
-        styles.sessionCard,
-        {
-          backgroundColor: dark ? COLORS.dark2 : COLORS.white,
-          borderColor: dark ? COLORS.dark3 : COLORS.grayscale200,
-        },
+        styles.inboxItem,
+        !item.read && styles.unreadItem
       ]}
-      onPress={() => handleSessionPress(item.id)}
-      activeOpacity={0.7}
+      onPress={() => handleItemPress(item)}
+      disabled={processingInvitation === item.id}
     >
-      <View style={styles.sessionHeader}>
-        <View style={styles.sessionAvatar}>
-          <Ionicons
-            name="sparkles"
-            size={24}
-            color={COLORS.primary}
-          />
-        </View>
-        <View style={styles.sessionInfo}>
-          <Text
-            style={[
-              styles.sessionTitle,
-              { color: dark ? COLORS.white : COLORS.greyscale900 },
-            ]}
-            numberOfLines={1}
-          >
-            {item.title}
-          </Text>
-          <Text
-            style={[
-              styles.sessionPreview,
-              { color: dark ? COLORS.grayscale400 : COLORS.grayscale700 },
-            ]}
-            numberOfLines={2}
-          >
-            {item.preview}
-          </Text>
-        </View>
-        <View style={styles.sessionMeta}>
-          <Text
-            style={[
-              styles.sessionDate,
-              { color: dark ? COLORS.grayscale400 : COLORS.grayscale700 },
-            ]}
-          >
-            {formatDate(item.updated_at)}
-          </Text>
-          <TouchableOpacity
-            style={styles.deleteButton}
-            onPress={() => handleDeleteSession(item.id, item.title)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons
-              name="trash-outline"
-              size={16}
-              color={dark ? COLORS.grayscale400 : COLORS.grayscale700}
-            />
-          </TouchableOpacity>
-        </View>
+      <View style={styles.itemIcon}>
+        {item.type === 'invitation' ? (
+          <Ionicons name="people" size={24} color={COLORS.primary} />
+        ) : (
+          <Ionicons name="notifications" size={24} color={COLORS.primary} />
+        )}
       </View>
       
-      {item.message_count && item.message_count > 0 && (
-        <View style={styles.sessionFooter}>
-          <View style={styles.messageCount}>
-            <Ionicons
-              name="chatbubble-outline"
-              size={12}
-              color={dark ? COLORS.grayscale400 : COLORS.grayscale700}
-            />
-            <Text
-              style={[
-                styles.messageCountText,
-                { color: dark ? COLORS.grayscale400 : COLORS.grayscale700 },
-              ]}
-            >
-              {item.message_count} messages
-            </Text>
-          </View>
+      <View style={styles.itemContent}>
+        <View style={styles.itemHeader}>
+          <Text style={[styles.itemTitle, !item.read && styles.unreadText]}>
+            {item.title}
+          </Text>
+          <Text style={styles.timestamp}>
+            {new Date(item.timestamp).toLocaleDateString()}
+          </Text>
         </View>
-      )}
+        
+        <Text style={styles.itemMessage} numberOfLines={2}>
+          {item.message}
+        </Text>
+        
+        {item.type === 'invitation' && (
+          <View style={styles.invitationActions}>
+            <TouchableOpacity
+              style={styles.acceptButton}
+              onPress={() => handleAcceptInvitation(item)}
+              disabled={processingInvitation === item.id}
+            >
+              {processingInvitation === item.id ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Text style={styles.acceptButtonText}>Accept</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+      
+      {!item.read && <View style={styles.unreadDot} />}
     </TouchableOpacity>
   );
 
-  // Render empty state
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <Ionicons
-        name="chatbubbles-outline"
-        size={80}
-        color={dark ? COLORS.grayscale400 : COLORS.grayscale700}
-      />
-      <Text
-        style={[
-          styles.emptyStateTitle,
-          { color: dark ? COLORS.white : COLORS.greyscale900 },
-        ]}
-      >
-        Start Your First Chat
-      </Text>
-      <Text
-        style={[
-          styles.emptyStateDescription,
-          { color: dark ? COLORS.grayscale400 : COLORS.grayscale700 },
-        ]}
-      >
-        Ask your AI assistant anything! Get help with project planning, task management, or general questions.
-      </Text>
-      <TouchableOpacity
-        style={[styles.newChatButton, { backgroundColor: COLORS.primary }]}
-        onPress={handleNewChat}
-      >
-        <Text style={styles.newChatButtonText}>Start New Chat</Text>
-      </TouchableOpacity>
-    </View>
-  );
+  useEffect(() => {
+    if (user) {
+      loadInboxData();
+    }
+  }, [user]);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Inbox</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading inbox...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
-    <SafeAreaView style={[styles.area, { backgroundColor: colors.background }]}>
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        {renderHeader()}
-        
-        {/* Content */}
-        <View style={styles.content}>
-          {isLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={COLORS.primary} />
-              <Text
-                style={[
-                  styles.loadingText,
-                  { color: dark ? COLORS.grayscale400 : COLORS.grayscale700 },
-                ]}
-              >
-                Loading conversations...
-              </Text>
-            </View>
-          ) : (
-            <FlatList
-              data={sessions}
-              renderItem={renderSessionItem}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={[
-                styles.listContainer,
-                sessions.length === 0 && styles.listContainerEmpty,
-              ]}
-              showsVerticalScrollIndicator={false}
-              refreshControl={
-                <RefreshControl
-                  refreshing={isRefreshing}
-                  onRefresh={onRefresh}
-                  colors={[COLORS.primary]}
-                  tintColor={COLORS.primary}
-                />
-              }
-              ListEmptyComponent={renderEmptyState}
-              ItemSeparatorComponent={() => <View style={styles.separator} />}
-            />
-          )}
-        </View>
-
-        {/* Floating Action Button */}
-        <TouchableOpacity 
-          style={styles.addPostBtn}
-          onPress={handleNewChat}
-        >
-          <Ionicons name="add" size={24} color={COLORS.white} />
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Inbox</Text>
+        <TouchableOpacity onPress={handleRefresh}>
+          <Ionicons name="refresh" size={24} color={COLORS.primary} />
         </TouchableOpacity>
       </View>
+
+      <FlatList
+        data={inboxItems}
+        keyExtractor={(item) => item.id}
+        renderItem={renderInboxItem}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
+        contentContainerStyle={styles.listContainer}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Ionicons name="mail-open" size={64} color={COLORS.gray} />
+            <Text style={styles.emptyTitle}>No messages</Text>
+            <Text style={styles.emptyMessage}>
+              You'll see team invitations and notifications here
+            </Text>
+          </View>
+        }
+      />
     </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  area: {
-    flex: 1,
-  },
   container: {
     flex: 1,
-    padding: 16,
+    backgroundColor: COLORS.white,
   },
-  headerContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center"
-  },
-  headerLogo: {
-    height: 36,
-    width: 36,
-    tintColor: COLORS.primary
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.greyscale300,
   },
   headerTitle: {
-    fontSize: 20,
-    fontFamily: "bold",
-    marginLeft: 12
-  },
-  headerRight: {
-    flexDirection: "row",
-    alignItems: "center"
-  },
-  moreCircleIcon: {
-    width: 24,
-    height: 24,
-  },
-  content: {
-    flex: 1,
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: COLORS.black,
   },
   loadingContainer: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 32,
+    alignItems: 'center',
   },
   loadingText: {
-    fontSize: 16,
-    fontFamily: 'medium',
     marginTop: 16,
+    fontSize: 16,
+    color: COLORS.gray,
   },
   listContainer: {
-    paddingTop: 8,
-  },
-  listContainerEmpty: {
-    flex: 1,
-  },
-  sessionCard: {
-    borderRadius: 12,
-    borderWidth: 1,
     padding: 16,
-    marginVertical: 6,
   },
-  sessionHeader: {
+  inboxItem: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  sessionAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: COLORS.primary + '20',
-    alignItems: 'center',
+  unreadItem: {
+    backgroundColor: '#f8f9ff',
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
+  },
+  itemIcon: {
+    marginRight: 12,
     justifyContent: 'center',
-    marginRight: 12,
   },
-  sessionInfo: {
+  itemContent: {
     flex: 1,
-    marginRight: 12,
   },
-  sessionTitle: {
-    fontSize: 16,
-    fontFamily: 'semiBold',
+  itemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 4,
   },
-  sessionPreview: {
-    fontSize: 14,
-    fontFamily: 'regular',
-    lineHeight: 20,
-  },
-  sessionMeta: {
-    alignItems: 'flex-end',
-  },
-  sessionDate: {
-    fontSize: 12,
-    fontFamily: 'medium',
-    marginBottom: 8,
-  },
-  deleteButton: {
-    padding: 4,
-  },
-  sessionFooter: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.grayscale200,
-  },
-  messageCount: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  messageCountText: {
-    fontSize: 12,
-    fontFamily: 'medium',
-    marginLeft: 6,
-  },
-  separator: {
-    height: 1,
-  },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-  },
-  emptyStateTitle: {
-    fontSize: 20,
-    fontFamily: 'semiBold',
-    marginTop: 24,
-    marginBottom: 8,
-  },
-  emptyStateDescription: {
-    fontSize: 14,
-    fontFamily: 'regular',
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 32,
-  },
-  newChatButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  newChatButtonText: {
+  itemTitle: {
     fontSize: 16,
-    fontFamily: 'semiBold',
-    color: COLORS.white,
+    fontWeight: '600',
+    color: COLORS.black,
+    flex: 1,
   },
-  addPostBtn: {
-    width: 58,
-    height: 58,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 999,
+  unreadText: {
+    fontWeight: 'bold',
+  },
+  timestamp: {
+    fontSize: 12,
+    color: COLORS.gray,
+  },
+  itemMessage: {
+    fontSize: 14,
+    color: COLORS.gray,
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  invitationActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  acceptButton: {
     backgroundColor: COLORS.primary,
-    position: "absolute",
-    bottom: 72,
-    right: 16,
-    zIndex: 999,
-    shadowRadius: 10,
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.2,
-    shadowOffset: { width: 0, height: 10 }
-  }
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  acceptButtonText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.primary,
+    marginLeft: 8,
+    alignSelf: 'center',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 100,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.black,
+    marginTop: 16,
+  },
+  emptyMessage: {
+    fontSize: 16,
+    color: COLORS.gray,
+    textAlign: 'center',
+    marginTop: 8,
+    paddingHorizontal: 40,
+  },
 });
-
-export default Inbox;

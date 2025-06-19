@@ -1,4 +1,5 @@
-import { COLORS, icons } from '@/constants';
+import UserAvatar from '@/components/UserAvatar';
+import { COLORS, icons, WEB_INPUT_STYLES } from '@/constants';
 import { useTheme } from '@/theme/ThemeProvider';
 import { SearchUser, TeamService } from '@/utils/teamService';
 import { Ionicons } from '@expo/vector-icons';
@@ -48,14 +49,24 @@ const ProjectDetailsAddTeamMember = () => {
         
         try {
             setSearchLoading(true);
-            const users = await TeamService.searchUsers(query);
-            setSearchResults(users);
+            const result = await TeamService.searchUsers(query, 20);
+            setSearchResults(result.users);
         } catch (error) {
             console.error('Search error:', error);
             Alert.alert('Error', 'Failed to search users');
         } finally {
             setSearchLoading(false);
         }
+    }, [projectId]);
+
+    // Debug effect to run once on component mount
+    useEffect(() => {
+        const runDebug = async () => {
+            console.log('🔍 Running user discovery debug...');
+            const debugInfo = await TeamService.debugUserDiscovery();
+            console.log('Debug results:', debugInfo);
+        };
+        runDebug();
     }, []);
 
     // Debounced search effect
@@ -92,9 +103,10 @@ const ProjectDetailsAddTeamMember = () => {
             for (const user of selectedUserData) {
                 await TeamService.inviteTeamMember({
                     projectId,
-                    email: user.email || `${user.username}@example.com`,
+                    userId: user.id, // Use user ID for registered users instead of email
                     role: inviteRole,
-                    message: inviteMessage
+                    message: inviteMessage,
+                    sendNotification: true // Enable in-app notifications
                 });
             }
 
@@ -157,13 +169,11 @@ const ProjectDetailsAddTeamMember = () => {
                 onPress={() => toggleUserSelection(user.id)}
             >
                 <View style={styles.userLeft}>
-                    {user.avatar_url ? (
-                        <Image source={{ uri: user.avatar_url }} style={styles.userAvatar} />
-                    ) : (
-                        <View style={[styles.userAvatar, styles.placeholderAvatar]}>
-                            <Ionicons name="person" size={20} color={COLORS.grayscale400} />
-                        </View>
-                    )}
+                    <UserAvatar
+                        size={40}
+                        userId={user.id}
+                        style={styles.userAvatar}
+                    />
                     <View style={styles.userInfo}>
                         <Text style={[styles.userName, {
                             color: dark ? COLORS.white : COLORS.greyscale900
@@ -265,7 +275,7 @@ const ProjectDetailsAddTeamMember = () => {
                                     style={[styles.textInput, {
                                         backgroundColor: dark ? COLORS.dark2 : COLORS.secondaryWhite,
                                         color: dark ? COLORS.white : COLORS.greyscale900
-                                    }]}
+                                    }, WEB_INPUT_STYLES]}
                                     placeholder="Enter email address"
                                     placeholderTextColor={COLORS.grayscale400}
                                     value={inviteEmail}
@@ -280,7 +290,7 @@ const ProjectDetailsAddTeamMember = () => {
                                     backgroundColor: dark ? COLORS.dark3 : COLORS.grayscale200
                                 }]} />
                                 <Text style={[styles.orText, {
-                                    color: dark ? COLORS.grayscale400 : COLORS.grayscale600
+                                    color: dark ? COLORS.grayscale400 : COLORS.grayscale700
                                 }]}>OR</Text>
                                 <View style={[styles.dividerLine, {
                                     backgroundColor: dark ? COLORS.dark3 : COLORS.grayscale200
@@ -295,7 +305,7 @@ const ProjectDetailsAddTeamMember = () => {
                                     style={[styles.textInput, {
                                         backgroundColor: dark ? COLORS.dark2 : COLORS.secondaryWhite,
                                         color: dark ? COLORS.white : COLORS.greyscale900
-                                    }]}
+                                    }, WEB_INPUT_STYLES]}
                                     placeholder="Enter phone number"
                                     placeholderTextColor={COLORS.grayscale400}
                                     value={invitePhone}
@@ -314,7 +324,7 @@ const ProjectDetailsAddTeamMember = () => {
                                     style={[styles.textInput, styles.messageInput, {
                                         backgroundColor: dark ? COLORS.dark2 : COLORS.secondaryWhite,
                                         color: dark ? COLORS.white : COLORS.greyscale900
-                                    }]}
+                                    }, WEB_INPUT_STYLES]}
                                     placeholder="Add a personal message to the invitation..."
                                     placeholderTextColor={COLORS.grayscale400}
                                     value={inviteMessage}
@@ -397,7 +407,7 @@ const ProjectDetailsAddTeamMember = () => {
                         <TextInput
                             style={[styles.searchInput, {
                                 color: dark ? COLORS.white : COLORS.greyscale900
-                            }]}
+                            }, WEB_INPUT_STYLES]}
                             placeholder="Search by name or username..."
                             placeholderTextColor={COLORS.grayscale400}
                             value={searchQuery}
@@ -429,7 +439,7 @@ const ProjectDetailsAddTeamMember = () => {
                                 <View style={styles.noResults}>
                                     <Ionicons name="search-outline" size={48} color={COLORS.grayscale400} />
                                     <Text style={[styles.noResultsText, {
-                                        color: dark ? COLORS.grayscale400 : COLORS.grayscale600
+                                        color: dark ? COLORS.grayscale400 : COLORS.grayscale700
                                     }]}>No users found</Text>
                                 </View>
                             )}
@@ -790,7 +800,7 @@ const styles = StyleSheet.create({
         color: COLORS.white,
         fontSize: 16,
         fontFamily: "bold"
-    }
+    },
 });
 
 export default ProjectDetailsAddTeamMember;

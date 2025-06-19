@@ -13,6 +13,8 @@ export interface SignUpData {
   email: string;
   password: string;
   fullName?: string;
+  firstName?: string;
+  lastName?: string;
 }
 
 export interface SignInData {
@@ -29,25 +31,34 @@ export interface ProfileData {
 
 export class AuthService {
   // Sign up with email and password
-  static async signUp({ email, password, fullName }: SignUpData): Promise<AuthResponse> {
+  static async signUp({ email, password, fullName, firstName, lastName }: SignUpData): Promise<AuthResponse> {
     try {
+      console.log('AuthService.signUp called with:', { email, password, fullName, firstName, lastName });
+      
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: email.trim().toLowerCase(),
         password,
         options: {
           data: {
             full_name: fullName || '',
+            first_name: firstName || '',
+            last_name: lastName || '',
           },
+          emailRedirectTo: 'exp://localhost:8081/welcome-confirmed',
         },
       });
 
+      console.log('Supabase signUp response:', { data, error });
+
       if (error) {
+        console.error('Supabase signUp error:', error);
         return {
           success: false,
           error: error.message,
         };
       }
 
+      console.log('AuthService.signUp success:', data);
       return {
         success: true,
         data,
@@ -55,6 +66,7 @@ export class AuthService {
         session: data.session,
       };
     } catch (error: any) {
+      console.error('AuthService.signUp exception:', error);
       return {
         success: false,
         error: error.message || 'An unexpected error occurred',

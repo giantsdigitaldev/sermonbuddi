@@ -2,6 +2,17 @@ import { Dimensions } from 'react-native';
 
 const { height, width } = Dimensions.get('window');
 
+export const WEB_INPUT_STYLES = {
+    outline: 'none !important',
+    outlineWidth: 0,
+    outlineColor: 'transparent',
+    border: 'none',
+    boxShadow: 'none !important',
+    WebkitAppearance: 'none',
+    MozAppearance: 'none',
+    appearance: 'none',
+} as any;
+
 export const COLORS = {
     primary: '#246bfd',
     secondary: '#FFD300',

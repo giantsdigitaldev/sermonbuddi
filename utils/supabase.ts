@@ -92,6 +92,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
+// Make supabase client globally available for web debugging
+if (Platform.OS === 'web' && typeof window !== 'undefined') {
+  (window as any).supabase = supabase;
+  console.log('✅ Supabase client attached to window for web debugging');
+}
+
 // Add auth state debugging
 supabase.auth.onAuthStateChange((event, session) => {
   console.log('Auth state changed:', event, session ? 'User logged in' : 'User logged out');

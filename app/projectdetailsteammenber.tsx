@@ -1,3 +1,4 @@
+import UserAvatar from '@/components/UserAvatar';
 import { COLORS, icons } from '@/constants';
 import { useTheme } from '@/theme/ThemeProvider';
 import { TeamMember, TeamService } from '@/utils/teamService';
@@ -177,13 +178,11 @@ const ProjectDetailsTeamMember = () => {
                 onPress={() => handleMemberAction(member)}
             >
                 <View style={styles.memberLeft}>
-                    {member.user_avatar ? (
-                        <Image source={{ uri: member.user_avatar }} style={styles.avatar} />
-                    ) : (
-                        <View style={[styles.avatar, styles.placeholderAvatar]}>
-                            <Ionicons name="person" size={24} color={COLORS.grayscale400} />
-                        </View>
-                    )}
+                    <UserAvatar
+                        size={50}
+                        userId={member.id}
+                        style={styles.avatar}
+                    />
                     <View style={styles.memberInfo}>
                         <View style={styles.nameRow}>
                             <Text style={[styles.name, {

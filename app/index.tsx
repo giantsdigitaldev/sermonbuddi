@@ -73,6 +73,7 @@ const OnboardingScreen: React.FC<{ onDone?: () => void }> = React.memo(({ onDone
   const [currentIndex, setCurrentIndex] = useState(0);
   const listRef = useRef<FlatList>(null);
   const { colors, dark } = useTheme();
+  
   const { isAuthenticated, loading } = useAuth();
 
   // All hooks must be called before any conditional returns

@@ -1,5 +1,5 @@
 import Checkbox from 'expo-checkbox';
-import { useNavigation } from 'expo-router';
+import { useNavigation, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useReducer, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,18 +15,20 @@ import { useTheme } from '../theme/ThemeProvider';
 import { validateInput } from '../utils/actions/formActions';
 import { reducer } from '../utils/reducers/formReducers';
 
-const isTestMode = true;
+const isTestMode = false;
 
 const initialState = {
     inputValues: {
         email: isTestMode ? 'test@example.com' : '',
         password: isTestMode ? 'password123' : '',
-        fullName: isTestMode ? 'Test User' : '',
+        firstName: isTestMode ? 'Test' : '',
+        lastName: isTestMode ? 'User' : '',
     },
     inputValidities: {
-        email: false,
-        password: false,
-        fullName: false
+        email: undefined,
+        password: undefined,
+        firstName: undefined,
+        lastName: undefined
     },
     formIsValid: false,
 }
@@ -38,6 +40,7 @@ type Nav = {
 // Signup Screen
 const Signup = () => {
     const { navigate } = useNavigation<Nav>();
+    const router = useRouter();
     const [formState, dispatchFormState] = useReducer(reducer, initialState);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -65,19 +68,23 @@ const Signup = () => {
     }, [error]);
 
     const handleSignup = async () => {
-        const { email, password, fullName } = formState.inputValues;
+        const { email, password, firstName, lastName } = formState.inputValues;
+        
+        console.log('Signup attempt:', { email, password, firstName, lastName });
+        console.log('FormState:', formState);
         
         if (!email || !password) {
             setError('Please fill in all required fields');
             return;
         }
 
-        if (!formState.inputValidities.email) {
+        // Validation error messages are stored as strings when invalid, undefined when valid
+        if (formState.inputValidities.email !== undefined) {
             setError('Please enter a valid email address');
             return;
         }
 
-        if (!formState.inputValidities.password) {
+        if (formState.inputValidities.password !== undefined) {
             setError('Password must be at least 6 characters long');
             return;
         }
@@ -91,23 +98,23 @@ const Signup = () => {
         setError(null);
 
         try {
-            const result = await signUp(email, password, fullName);
+            // Combine first and last name for full name
+            const fullName = `${firstName || ''} ${lastName || ''}`.trim();
+            console.log('Calling signUp with:', { email, password, firstName, lastName, fullName });
+            const result = await signUp(email, password, fullName, firstName, lastName);
+            console.log('SignUp result:', result);
             
             if (result.success) {
-                Alert.alert(
-                    'Registration Successful',
-                    'Please check your email to verify your account before signing in.',
-                    [
-                        { 
-                            text: 'OK', 
-                            onPress: () => navigate('login')
-                        }
-                    ]
-                );
+                // Navigate to email confirmation screen with the email address
+                router.push({
+                    pathname: '/emailconfirmation',
+                    params: { email: email }
+                });
             } else {
                 setError(result.error || 'Registration failed. Please try again.');
             }
         } catch (err: any) {
+            console.error('Signup error:', err);
             setError(err.message || 'An unexpected error occurred');
         } finally {
             setIsLoading(false);
@@ -140,14 +147,24 @@ const Signup = () => {
                             <Text style={[styles.title, { color: dark ? COLORS.white : COLORS.greyscale900 }]}>Account</Text>
                         </View>
                         <Input
-                            id="fullName"
+                            id="firstName"
                             onInputChanged={inputChangedHandler}
-                            errorText={formState.inputValidities['fullName']}
-                            placeholder="Full Name"
+                            errorText={formState.inputValidities['firstName']}
+                            placeholder="First Name"
                             placeholderTextColor={dark ? COLORS.grayTie : COLORS.black}
                             icon={icons.profile}
                             autoCapitalize="words"
-                            autoComplete="name"
+                            autoComplete="given-name"
+                        />
+                        <Input
+                            id="lastName"
+                            onInputChanged={inputChangedHandler}
+                            errorText={formState.inputValidities['lastName']}
+                            placeholder="Last Name (Optional)"
+                            placeholderTextColor={dark ? COLORS.grayTie : COLORS.black}
+                            icon={icons.profile}
+                            autoCapitalize="words"
+                            autoComplete="family-name"
                         />
                         <Input
                             id="email"
@@ -189,7 +206,10 @@ const Signup = () => {
                         <Button
                             title={isLoading ? "Creating Account..." : "Sign Up"}
                             filled
-                            onPress={handleSignup}
+                            onPress={() => {
+                                console.log('🔘 Sign Up button pressed');
+                                handleSignup();
+                            }}
                             style={styles.button}
                             disabled={isLoading}
                         />

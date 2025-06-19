@@ -17,6 +17,8 @@ const coreIcons = {
   back: require("../assets/icons/back.png"),
   search: require("../assets/icons/search.png"),
   plus: require("../assets/icons/plus.png"),
+  addPlus: require("../assets/icons/add-plus.png"),
+  addUser: require("../assets/icons/add-user.png"),
   more: require("../assets/icons/more.png"),
   moreCircle: require("../assets/icons/more-circle.png"),
   arrowBack: require("../assets/icons/arrow-back.png"),
@@ -44,6 +46,7 @@ const loadSecondaryIcons = () => {
     calendar: require("../assets/icons/calendar.png"),
     calendar2: require("../assets/icons/calendar2.png"),
     calendar3: require("../assets/icons/calendar3.png"),
+    calendar5: require("../assets/icons/calendar5.png"),
     call: require("../assets/icons/call.png"),
     categoryOutline: require("../assets/icons/category-outline.png"),
     category: require("../assets/icons/category.png"),
@@ -72,6 +75,8 @@ const loadSecondaryIcons = () => {
     hide: require("../assets/icons/hide.png"),
     home2: require("../assets/icons/home2.png"),
     image: require("../assets/icons/image.png"),
+    image2: require("../assets/icons/image2.png"),
+    camera: require("../assets/icons/camera.png"),
     infoCircle: require("../assets/icons/info-circle.png"),
     locationOutline: require("../assets/icons/location-outline.png"),
     location: require("../assets/icons/location.png"),
@@ -222,6 +227,7 @@ const loadSecondaryIcons = () => {
     user3: require("../assets/icons/user3.png"),
     user4: require("../assets/icons/user4.png"),
     status: require("../assets/icons/status.png"),
+    trafficlightDark: require("../assets/images/trafficlight-dark.svg"),
   };
   
   secondaryIconsLoaded = true;

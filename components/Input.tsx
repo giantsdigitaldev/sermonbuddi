@@ -1,6 +1,6 @@
 import React, { FC, useState } from 'react';
-import { Image, ImageSourcePropType, StyleSheet, Text, TextInput, TextInputProps, View } from 'react-native';
-import { COLORS, SIZES } from '../constants';
+import { Image, ImageSourcePropType, Platform, StyleSheet, Text, TextInput, TextInputProps, View } from 'react-native';
+import { COLORS, SIZES, WEB_INPUT_STYLES } from '../constants';
 import { useTheme } from '../theme/ThemeProvider';
 
 interface InputProps extends TextInputProps {
@@ -53,7 +53,11 @@ const Input: FC<InputProps> = (props) => {
                     onChangeText={onChangeText}
                     onFocus={handleFocus}
                     onBlur={handleBlur}
-                    style={[styles.input, { color: dark ? COLORS.white : COLORS.black }]}
+                    style={[
+                        styles.input, 
+                        { color: dark ? COLORS.white : COLORS.black },
+                        Platform.OS === 'web' && WEB_INPUT_STYLES
+                    ]}
                     placeholder={props.placeholder}
                     placeholderTextColor={props.placeholderTextColor}
                     autoCapitalize="none"

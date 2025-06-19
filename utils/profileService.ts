@@ -110,7 +110,15 @@ export class ProfileService {
           console.error('user-content bucket not found. Available buckets:', buckets?.map(b => b.name));
           return { 
             success: false, 
-            error: 'Storage bucket "user-content" not found. Please run the database setup script to create the bucket.' 
+            error: `Storage bucket "user-content" not found. 
+
+🔧 Quick Fix:
+1. Open your Supabase Dashboard
+2. Go to Storage → Create bucket named "user-content" 
+3. Set it to Public with 5MB limit
+4. Run the SQL policies
+
+📖 Full instructions: See STORAGE_BUCKET_SETUP.md file` 
           };
         }
       } catch (bucketError) {
@@ -379,7 +387,7 @@ export class ProfileService {
   // Get profile image picker options
   static async getImagePickerOptions(): Promise<ImagePicker.ImagePickerOptions> {
     return {
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: 'Images' as any, // Updated to avoid deprecation warning
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
